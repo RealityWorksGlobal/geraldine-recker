@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Géraldine Recker</title>
+
+<meta name="description" content="Architecture and projects.">
+<meta property="og:title" content="Géraldine Recker">
+<meta property="og:description" content="Architecture and projects.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://REPLACE-DOMAIN">
+<meta property="og:image" content="https://REPLACE-DOMAIN/assets/og.jpg">
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<button id="menu-toggle" aria-label="Open index" aria-expanded="false">Index</button>
+
+<nav id="sidebar" aria-label="Project index">
+  <a class="brand" href="#" data-nav="home">Géraldine Recker</a>
+  <ul id="project-index"></ul>
+  <ul class="meta">
+    <li><a href="#" data-nav="info">Info</a></li>
+    <li><a href="mailto:REPLACE@EMAIL.COM">Contact</a></li>
+  </ul>
+</nav>
+
+<main id="main">
+
+  <section id="home" class="view">
+
+    <div class="col col-text">
+      <div id="home-list"></div>
+    </div>
+
+    <div class="col col-content">
+      <figure class="frame">
+        <img id="cover-image" alt="">
+      </figure>
+    </div>
+
+  </section>
+
+  <section id="project" class="view" hidden>
+
+    <div class="col col-text">
+      <h1 id="project-title" class="sr-only"></h1>
+      <div id="project-meta"></div>
+      <div id="project-text"></div>
+    </div>
+
+    <div class="col col-content">
+      <!-- The cover carries over from the nav, so opening a project
+           scrolls down from it rather than cutting to new content. -->
+      <figure class="frame" id="project-cover">
+        <img id="project-cover-image" alt="">
+      </figure>
+      <div id="project-images"></div>
+      <div id="project-media"></div>
+    </div>
+
+  </section>
+
+  <section id="info" class="view" hidden>
+    <div class="info-body">
+      <div id="info-content"></div>
+      <p class="colophon">Site by <a href="mailto:studio@juliettemartin.org">Juliette Martin</a>.</p>
+    </div>
+  </section>
+
+  <div id="error" hidden>
+    <p>The project list didn’t load. Reload the page.</p>
+  </div>
+
+</main>
+
+<div id="hover-meta" hidden></div>
+
+<div id="scrollbar" aria-hidden="true">
+  <span class="scroll-dot"></span>
+</div>
+
+<div id="cursor" aria-hidden="true"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
