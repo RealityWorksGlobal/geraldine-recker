@@ -1,12 +1,12 @@
 /* Géraldine Recker — portfolio
  *
  * Sheet columns are matched by header NAME, not position, so columns
- * can be dragged around freely. FIELDS below maps each internal field
- * to the header(s) that feed it. Headers are stripped to letters and
+ * can be dragged around freely. FIELDS maps each internal field to
+ * the header that feeds it. Headers are stripped to letters and
  * digits before matching, so "Project Title", "project-title" and
- * "projecttitle" are all the same thing.
+ * "projecttitle" are the same thing.
  *
- * Only a title is required. Everything else is optional.
+ * Only a title is required; everything else is optional.
  */
 
 var CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGHShozHpH9zqXji89-kkpWgNqBSE0-5qX_duOtUYPBBpIHzHEmXbUT5Tw1qXdmA8yxQvS0tjAlqUI/pub?gid=0&single=true&output=csv';
@@ -23,6 +23,7 @@ var FIELDS = {
   medium:      ['projectmedium'],
   type:        ['projecttype'],
   year:        ['projectyear'],
+  captions:    ['captions']
 };
 
 var COVER_INTERVAL = 2000;   // landing cycle, ms
@@ -78,11 +79,12 @@ function imgURL(name) {
   return IMAGE_BASE + p;
 }
 
+// A content entry can be a still or a clip; the extension decides.
 function isVideo(name) {
   return /\.(mp4|mov|webm|m4v)(\?|$)/i.test(String(name).trim());
 }
 
-// Year, type, medium — in the order the mockups show them.
+// Year, type, medium — the three parts of the hover line.
 function metaBits(p) {
   return [p.year, p.type, p.medium].filter(Boolean);
 }
@@ -110,12 +112,27 @@ function fail(msg) {
   markReady();
 }
 
+/* Portrait images are capped by height rather than width, so the
+   frame needs to know the orientation. Natural dimensions aren't
+   available until the file reports them. */
+function tagOrientation(node, frame) {
+  function check() {
+    var w = node.naturalWidth || node.videoWidth;
+    var h = node.naturalHeight || node.videoHeight;
+    if (!w || !h) return;
+    frame.classList.toggle('is-portrait', h > w);
+  }
+  check();
+  node.addEventListener('load', check);
+  node.addEventListener('loadedmetadata', check);
+}
+
 /* ---------- state ---------- */
 
 var coverPool = [];
 var coverIndex = 0;
 var coverTimer = null;
-var currentCover = '';     // whatever photo is on screen right now
+var currentCover = '';     // the photo on screen right now
 var landingOver = false;
 var hoverArmed = true;
 
@@ -134,7 +151,10 @@ function setCover(path) {
   currentCover = path;
   var img = el('cover-image');
   var loader = new Image();
-  loader.onload = function () { img.src = loader.src; };
+  loader.onload = function () {
+    img.src = loader.src;
+    tagOrientation(img, img.closest('.frame'));
+  };
   loader.src = imgURL(path);
 }
 
@@ -188,7 +208,7 @@ function renderHome() {
 function renderProject(p) {
   el('project-title').textContent = p.title;
 
-  // Metadata stacks vertically here, one line each.
+  // Year / type / medium, one line each, above the description.
   var meta = el('project-meta');
   meta.innerHTML = '';
   metaBits(p).forEach(function (b) {
@@ -199,13 +219,16 @@ function renderProject(p) {
 
   paragraphs(el('project-text'), p.description);
 
-  // The cover already on screen leads the column, so opening a project
-  // scrolls on from it instead of cutting to something new.
+  // The cover already on screen leads the column, so opening a
+  // project continues from it rather than cutting.
   var lead = currentCover || p.covers[0] || p.images[0];
-  el('project-cover-image').src = lead ? imgURL(lead) : '';
+  var coverImg = el('project-cover-image');
+  coverImg.src = lead ? imgURL(lead) : '';
+  tagOrientation(coverImg, el('project-cover'));
 
   var box = el('project-images');
   box.innerHTML = '';
+
   p.images.forEach(function (name, i) {
     var fig = document.createElement('figure');
     fig.className = 'frame';
@@ -230,21 +253,24 @@ function renderProject(p) {
       media.loading = i === 0 ? 'eager' : 'lazy';
       media.decoding = 'async';
     }
-    fig.appendChild(media);  
+
+    fig.appendChild(media);
+    tagOrientation(media, fig);
 
     if (p.captions[i]) {
       var cap = document.createElement('figcaption');
       cap.textContent = p.captions[i];
       fig.appendChild(cap);
     }
+
     box.appendChild(fig);
   });
 
   document.title = 'Géraldine Recker — ' + p.title;
 }
 
-// Opening a project puts you back at the cover; the cursor invites
-// the scroll rather than doing it for you.
+// Opening a project puts you back at the cover; the scroll is the
+// visitor's to make.
 function resetMediaScroll() {
   var col = document.querySelector('#project .col-content');
   if (col) col.scrollTop = 0;
@@ -301,7 +327,7 @@ function wireHover() {
   });
 
   list.addEventListener('mouseover', function (e) {
-    if (!landingOver || !hoverArmed) return;
+    if (!landingOver) return;
 
     var a = e.target.closest('a[data-slug]');
     if (!a) return;
@@ -309,50 +335,82 @@ function wireHover() {
     var p = projects.filter(function (x) { return x.slug === a.dataset.slug; })[0];
     if (!p) return;
 
-    // Back to the browsing state: cover photo plus the hover line.
-    show('home');
+    // The metadata line always previews, even while reading a
+    // project — it costs nothing and answers "what is this one?".
+    var bits = metaBits(p);
+    if (bits.length) {
+      meta.innerHTML = '';
+      bits.forEach(function (b) {
+        var s = document.createElement('span');
+        s.textContent = b;
+        meta.appendChild(s);
+      });
+      placeMeta(a);
+      meta.hidden = false;
+    } else {
+      meta.hidden = true;
+    }
+
+    // Swapping the photo is the heavier move, and it waits until
+    // hover re-arms. It also only applies on the home view — while
+    // a project is open, hovering previews the line and nothing
+    // else, so what you're reading stays on screen.
+    if (!hoverArmed) return;
+    if (el('project').hidden === false) return;
 
     var shot = p.covers[0] || p.images[0];
     if (shot) setCover(shot);
-
-    var bits = metaBits(p);
-    if (!bits.length) { meta.hidden = true; return; }
-
-    meta.innerHTML = '';
-    bits.forEach(function (b) {
-      var s = document.createElement('span');
-      s.textContent = b;
-      meta.appendChild(s);
-    });
-
-    var col = document.querySelector('.view:not([hidden]) .col-text');
-    if (!col) return;
-
-    var linkBox = a.getBoundingClientRect();
-    var colBox = col.getBoundingClientRect();
-    var pad = parseFloat(getComputedStyle(col).paddingLeft) || 0;
-
-    meta.style.top = linkBox.top + 'px';
-    meta.style.left = (colBox.left + pad) + 'px';
-    meta.style.width = (colBox.width - pad) + 'px';
-    meta.hidden = false;
   });
 
   list.addEventListener('mouseleave', function () {
     meta.hidden = true;
   });
 
-  // Re-arms only once the cursor has left the whole sidebar.
+  // Re-arms only once the cursor has left the whole nav.
   el('sidebar').addEventListener('mouseleave', function () {
     hoverArmed = true;
   });
 }
 
+/* Positions the hover line level with the hovered name: starts at
+   the left edge of --meta-col and spans --meta-span columns.
+   Measured off the live grid, so it follows any change to --gap or
+   --cols without edits here. */
+function placeMeta(link) {
+  var meta = el('hover-meta');
+  var view = document.querySelector('.view:not([hidden])');
+  if (!view) return;
+
+  var style = getComputedStyle(view);
+  var tracks = style.gridTemplateColumns.split(' ').map(parseFloat);
+  var gap = parseFloat(style.columnGap) || 0;
+  var box = view.getBoundingClientRect();
+
+  var root = getComputedStyle(document.documentElement);
+  var col = parseInt(root.getPropertyValue('--meta-col'), 10) || 2;
+  var span = parseInt(root.getPropertyValue('--meta-span'), 10) || 2;
+
+  var left = box.left;
+  for (var i = 0; i < col - 1 && i < tracks.length; i++) {
+    left += tracks[i] + gap;
+  }
+
+  var width = 0;
+  for (var j = col - 1; j < col - 1 + span && j < tracks.length; j++) {
+    width += tracks[j] + gap;
+  }
+  width -= gap;
+
+  meta.style.top = link.getBoundingClientRect().top + 'px';
+  meta.style.left = left + 'px';
+  meta.style.width = width + 'px';
+}
+
 /* ---------- image focus ---------- */
 
-// Clicking an image clears the nav and text around it; the next click
-// anywhere brings them back. Capture phase, so on the very first click
-// of all this runs before endLanding and doesn't fire by accident.
+// Clicking an image clears the nav and text around it; the next
+// click anywhere brings them back. Capture phase, so the very first
+// click of a session goes to endLanding instead.
 function wireFocus() {
   document.addEventListener('click', function (e) {
     if (document.body.classList.contains('is-focus')) {
@@ -365,31 +423,81 @@ function wireFocus() {
     }
   }, true);
 
-  // Escape is the expected way out of anything full-bleed.
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') document.body.classList.remove('is-focus');
   });
 }
 
+/* ---------- cursor ---------- */
+
+// A dot following the pointer. Over an image it picks up a label,
+// since clicking there clears the page and that isn't guessable.
+var CURSOR_LABEL = '[click for silence]';
+
+function wireCursor() {
+  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+
+  var cursor = el('cursor');
+  if (!cursor) return;
+  var label = cursor.querySelector('.cursor-label');
+
+  document.body.classList.add('has-cursor');
+
+  var x = window.innerWidth / 2, y = window.innerHeight / 2;
+  var cx = x, cy = y;
+  var over = false;
+  var shown = false;
+
+  document.addEventListener('mousemove', function (e) {
+    x = e.clientX;
+    y = e.clientY;
+    over = !!(e.target.closest && e.target.closest('.frame img, .frame video'));
+  });
+
+  function frame() {
+    // Trails slightly, so it reads as an object rather than paint.
+    cx += (x - cx) * 0.2;
+    cy += (y - cy) * 0.2;
+    cursor.style.transform = 'translate(' + cx + 'px, ' + cy + 'px)';
+
+    // Only before the click — once everything is cleared, the
+    // label would be describing something already done.
+    var want = over && !document.body.classList.contains('is-focus');
+    if (want !== shown) {
+      shown = want;
+      if (label) label.textContent = want ? CURSOR_LABEL : '';
+      cursor.classList.toggle('has-label', want);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+}
+
 /* ---------- scroll indicator ---------- */
 
-/* A dot travelling down a hairline at the right edge of the window.
-   Indicator only — reports the scroll position of whichever column is
-   currently scrollable, and is not draggable. */
+// A dot travelling down a hairline at the right edge. Indicator
+// only — not draggable.
 function wireScrollbar() {
   var bar = el('scrollbar');
   if (!bar) return;
   var dot = bar.querySelector('.scroll-dot');
   if (!dot) return;
 
-  // The scrollable column of whatever view is showing.
+  // On desktop a column scrolls; on a phone the page itself does.
+  // Both expose scrollTop / scrollHeight / clientHeight, so the
+  // same maths drives the dot either way.
   function activeColumn() {
     var view = document.querySelector('.view:not([hidden])');
-    if (!view) return null;
-    var cols = view.querySelectorAll('.col-content, .info-body, .col');
-    for (var i = 0; i < cols.length; i++) {
-      if (cols[i].scrollHeight - cols[i].clientHeight > 4) return cols[i];
+    if (view) {
+      var cols = view.querySelectorAll('.col-content');
+      for (var i = 0; i < cols.length; i++) {
+        if (cols[i].scrollHeight - cols[i].clientHeight > 4) return cols[i];
+      }
     }
+    var doc = document.scrollingElement || document.documentElement;
+    if (doc && doc.scrollHeight - doc.clientHeight > 4) return doc;
     return null;
   }
 
@@ -413,78 +521,6 @@ function wireScrollbar() {
   }
 
   requestAnimationFrame(update);
-}
-
-/* ---------- cursor ---------- */
-
-/* One element that follows the pointer and names whatever a click or
-   a scroll would do right here. It replaces every other affordance —
-   there are no underlines or zoom cursors to fall back on, so any new
-   interaction needs a state added to cursorState() below. */
-function wireCursor() {
-  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-
-  var cursor = el('cursor');
-  if (!cursor) return;
-
-  document.body.classList.add('has-cursor');
-
-  var x = window.innerWidth / 2, y = window.innerHeight / 2;
-  var cx = x, cy = y;
-  var hovered = null;
-  var shown = '';
-
-  document.addEventListener('mousemove', function (e) {
-    x = e.clientX;
-    y = e.clientY;
-    hovered = e.target;
-  });
-
-  document.addEventListener('mouseleave', function () {
-    cursor.style.opacity = '0';
-  });
-
-  document.addEventListener('mouseenter', function () {
-    cursor.style.opacity = '1';
-  });
-
-  // Is there more media below the fold in this column?
-  function canScroll(node) {
-    var col = node && node.closest ? node.closest('.col-content') : null;
-    if (!col) return false;
-    return col.scrollHeight - col.clientHeight - col.scrollTop > 40;
-  }
-
-  // Priority runs top to bottom: the most specific thing wins.
-    // Each state is just a class name; the shape lives in CSS.
-  function cursorState() {
-    if (document.body.classList.contains('is-focus')) return 'close';
-    if (!landingOver) return 'enter';
-    if (!hovered || !hovered.closest) return '';
-    if (hovered.closest('.frame img, .frame video')) return 'open';
-    if (hovered.closest('#sidebar a')) return 'link';
-    if (canScroll(hovered)) return 'scroll';
-    return '';
-  }
-
-  var STATES = ['enter', 'open', 'close', 'link', 'scroll'];
-
-  function frame() {
-    cx += (x - cx) * 0.2;
-    cy += (y - cy) * 0.2;
-    cursor.style.transform = 'translate(' + cx + 'px, ' + cy + 'px)';
-
-    var state = cursorState();
-    if (state !== shown) {
-      shown = state;
-      STATES.forEach(function (s) {
-        cursor.classList.toggle('is-' + s, s === state);
-      });
-    }
-
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
 }
 
 /* ---------- routing ---------- */
@@ -543,22 +579,32 @@ function route() {
 function closeMenu() {
   el('sidebar').classList.remove('open');
   el('menu-toggle').setAttribute('aria-expanded', 'false');
-  el('menu-toggle').textContent = 'Index';
+  el('menu-toggle').textContent = 'index';
 }
 
 function toggleMenu() {
   var open = el('sidebar').classList.toggle('open');
   el('menu-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
-  el('menu-toggle').textContent = open ? 'Close' : 'Index';
+  el('menu-toggle').textContent = open ? 'close' : 'index';
 }
 
 /* ---------- boot ---------- */
 
 el('menu-toggle').addEventListener('click', toggleMenu);
 window.addEventListener('hashchange', route);
+window.addEventListener('resize', function () {
+  var meta = el('hover-meta');
+  if (meta && !meta.hidden) meta.hidden = true;
+});
 
-// Landing: nav hidden, photo cycling. A direct project link skips it.
-if (window.location.hash) {
+// Landing is a desktop idea: it rewards a cursor and a first click.
+// On a phone the list is simply there, and the first tap on an
+// image should clear the screen rather than be spent ending the
+// landing. A direct project link skips it everywhere.
+var isTouch = window.matchMedia('(max-width: 800px)').matches ||
+              !window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+if (window.location.hash || isTouch) {
   landingOver = true;
 } else {
   document.body.classList.add('is-landing');

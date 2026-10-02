@@ -1,7 +1,11 @@
 /* ============================================================
-   Géraldine Recker — stylesheet
-   1 tokens · 2 base · 3 sidebar · 4 layout
-   5 home · 6 project · 7 info · 8 mobile
+   Géraldine Recker
+   1 tokens · 2 font · 3 base · 4 grid · 5 nav
+   6 media · 7 text · 8 cursor · 9 scroll · 10 states · 11 mobile
+
+   One 8-column grid holds the page. --gap is the only spacing
+   value: outer margin, gutters, and the space between stacked
+   images are all the same number.
    ============================================================ */
 
 /* ---------- 1. tokens ---------- */
@@ -10,54 +14,77 @@
   --bg: #ffffff;
   --ink: #111111;
   --ink-soft: #767676;
-  --rule: #e4e4e4;
 
-  --sidebar-w: 12%;      /* nav column */
-  --col-text: 30%;       /* description column */
-  --pad: 30px;
-  --top-align: 300px;    /* where nav list and text column begin */
+  --cols: 8;
+  --gap: 30px;            /* the only spacing value on the page */
 
-  --fs-body: 15px;
-  --lh-body: 1.5;
+  --col-nav: 1 / 2;       /* nav */
+  --col-text: 1 / 3;      /* description, bottom-aligned */
+  --col-media: 5 / -1;    /* images */
 
-  --meta-gap: 1em;    /* between stacked metadata lines */
-  --nav-gap: 1em;     /* between nav items */
+  --meta-col: 2;          /* hover line starts at this column's left edge */
+  --meta-span: 2;         /* and runs this many columns wide */
 
-  --media-h: 60vh;       /* biggest an image is allowed to get */
-  --media-w: 35vw;       /* and how wide */
+  --select: #ffc9e2;      /* text selection */
+
+  --fs-body: 14px;
+  --lh-body: 1.3;
+
+  --dot: 7px;             /* cursor and scroll indicator, same size */
+  --cursor-opacity: 0.5;
 }
 
-/* ---------- 2. base ---------- */
+/* ---------- 2. font ---------- */
+
+@font-face {
+  font-family: "Suisse Intl";
+  src: url("fonts/SuisseIntl-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Suisse Intl";
+  src: url("fonts/SuisseIntl-Book.woff2") format("woff2");
+  font-weight: 450;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- 3. base ---------- */
 
 * { box-sizing: border-box; }
 
 [hidden] { display: none !important; }
 
-html, body {
-  height: 100%;
+html { height: 100%; }
+
+body {
   margin: 0;
-  padding: 0;
-  overflow: hidden;              /* page never scrolls; columns do */
+  height: 100%;
+  overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Suisse Intl", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
 }
 
+::selection { background: var(--select); color: var(--ink); }
+::-moz-selection { background: var(--select); color: var(--ink); }
+
 a { color: inherit; text-decoration: none; }
-a:hover { text-decoration: underline; }
 
 a:focus-visible,
 button:focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 1px solid var(--ink);
   outline-offset: 2px;
 }
 
-img { display: block; max-width: 100%; height: auto; }
+img, video { display: block; max-width: 100%; }
 
-/* Present for screen readers, invisible on screen. */
 .sr-only {
   position: absolute;
   width: 1px; height: 1px;
@@ -67,59 +94,230 @@ img { display: block; max-width: 100%; height: auto; }
   white-space: nowrap;
 }
 
-/* ---------- 3. sidebar ---------- */
+/* ---------- 4. grid ---------- */
+
+body {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  gap: var(--gap);
+  padding: var(--gap);
+}
+
+#bar { display: none; }        /* mobile only */
 
 #sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--sidebar-w);
-  height: 100vh;
-  padding: var(--top-align) var(--pad) var(--pad);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 1.6em;
+  grid-column: var(--col-nav);
+  grid-row: 1;
+  align-self: start;
   z-index: 20;
-  background: var(--bg);
 }
 
-/* Out of the flow, so its size can't push the list down. */
-#sidebar .brand {
-  position: absolute;
-  top: var(--pad);
-  left: var(--pad);
-  right: var(--pad);
+#main {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-height: 0;
+  height: 100%;
 }
+
+/* The same 8 columns again, so children land on the page's lines. */
+.view {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  gap: var(--gap);
+  height: 100%;
+  min-height: 0;
+}
+
+.view > * { min-width: 0; }
+
+/* ---------- 5. nav ---------- */
 
 #sidebar ul { list-style: none; margin: 0; padding: 0; }
-#sidebar li { margin: 0 0 var(--nav-gap); }
-#sidebar .meta { margin-top: auto; }
+#sidebar li { margin: 0; }
+#sidebar .brand { display: block; }
 #sidebar a.active { text-decoration: underline; }
 
-/* Hovering one project dims the others. */
 #project-index:hover a { color: var(--ink-soft); }
 #project-index a:hover { color: var(--ink); }
 
-/* ---- scroll indicator ---- */
+#menu-toggle {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
 
-/* Native bars off everywhere. Nothing reserves or releases width, so
-   moving between home and a project no longer shifts things sideways. */
-.col,
-#info > * {
-  scrollbar-width: none;            /* Firefox */
+/* ---------- 6. media ---------- */
+
+.col-content {
+  grid-column: var(--col-media);
+  grid-row: 1;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Continuous scroll, no snapping. Spacing between images is the
+   same --gap as every other interval on the page. */
+.frame {
+  margin: 0 0 var(--gap);
+  display: block;
+}
+
+.frame:last-child { margin-bottom: 0; }
+
+/* Landscape fills the four columns. */
+.frame img,
+.frame video {
+  width: 100%;
+  height: auto;
+}
+
+/* Portrait would be absurdly tall at four columns, so it's capped
+   by height instead and centred across the span. JS tags the frame
+   once the file reports its dimensions. */
+.frame.is-portrait {
+  display: flex;
+  justify-content: center;
+}
+
+.frame.is-portrait img,
+.frame.is-portrait video {
+  width: auto;
+  max-width: 100%;
+  max-height: calc(100vh - var(--gap) * 2);
+}
+
+#project-images { display: contents; }
+
+#project-images figcaption {
+  margin-top: calc(var(--gap) / 3);
+  color: var(--ink-soft);
+}
+
+/* ---------- 7. text ---------- */
+
+/* Description sits on the bottom line, columns 1–2. */
+.col-text {
+  grid-column: var(--col-text);
+  grid-row: 1;
+  align-self: end;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+/* Year / type / medium, stacked above the description. */
+#project-meta { margin-bottom: 1em; }
+#project-meta p { margin: 0; }
+
+#project-text p { margin: 0; }
+
+#info-content { margin-bottom: 1em; }
+.info-block { margin-bottom: 1em; }
+.info-block h2 {
+  font-size: inherit;
+  font-weight: 400;
+  margin: 0;
+  color: var(--ink-soft);
+}
+.info-block p { margin: 0; }
+
+.colophon { margin: 0; color: var(--ink-soft); }
+
+#error {
+  grid-column: var(--col-text);
+  align-self: end;
+  color: var(--ink-soft);
+}
+
+/* The year / type / medium line. Starts at the left edge of
+   --meta-col and spans --meta-span columns — the three parts
+   spread evenly across that width. JS places it level with
+   whichever project name is hovered. */
+#hover-meta {
+  position: fixed;
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  z-index: 30;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#hover-meta span { flex: 0 0 auto; }
+
+/* ---------- 8. cursor ---------- */
+
+@media (hover: hover) and (pointer: fine) {
+  body.has-cursor,
+  body.has-cursor a,
+  body.has-cursor img,
+  body.has-cursor video,
+  body.has-cursor button { cursor: none; }
+}
+
+/* The dot itself is ::before; the label sits beside it and only
+   appears over media, before a click. */
+#cursor {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 200;
+  display: none;
+  align-items: center;
+  gap: 0.8em;
+  opacity: var(--cursor-opacity);
+  pointer-events: none;
+  will-change: transform;
+}
+
+body.has-cursor #cursor { display: flex; }
+
+#cursor::before {
+  content: '';
+  flex: 0 0 auto;
+  width: var(--dot);
+  height: var(--dot);
+  margin: calc(var(--dot) / -2) 0 0 calc(var(--dot) / -2);
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.cursor-label {
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+#cursor.has-label .cursor-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-label { transition: none; }
+}
+
+/* ---------- 9. scroll indicator ---------- */
+
+.col-content,
+.col-text {
+  scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.col::-webkit-scrollbar,
-#info > *::-webkit-scrollbar { width: 0; height: 0; }
+.col-content::-webkit-scrollbar,
+.col-text::-webkit-scrollbar { width: 0; height: 0; }
 
 #scrollbar {
   position: fixed;
-  top: var(--top-align);
-  bottom: var(--pad);
-  right: calc(var(--pad) / 2);
-  width: 7px;
+  top: var(--gap);
+  bottom: var(--gap);
+  right: calc(var(--gap) / 2 - var(--dot) / 2);
+  width: var(--dot);
   z-index: 150;
   pointer-events: none;
   opacity: 0;
@@ -127,15 +325,12 @@ img { display: block; max-width: 100%; height: auto; }
 }
 
 #scrollbar.is-live { opacity: 1; }
-
 body.is-focus #scrollbar { opacity: 0; }
 
-/* the rule */
 #scrollbar::before {
   content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 0; bottom: 0;
   left: 50%;
   width: 1px;
   margin-left: -0.5px;
@@ -143,88 +338,19 @@ body.is-focus #scrollbar { opacity: 0; }
   opacity: 0.18;
 }
 
-/* the dot — same size as the cursor's */
 .scroll-dot {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 7px;
-  height: 7px;
+  top: 0; left: 0;
+  width: var(--dot);
+  height: var(--dot);
   border-radius: 50%;
   background: var(--ink);
   will-change: transform;
 }
 
-/* ---- custom cursor ---- */
+/* ---------- 10. states ---------- */
 
-/* Only where there's a real pointer. Touch devices keep theirs. */
-@media (hover: hover) and (pointer: fine) {
-  body.has-cursor,
-  body.has-cursor video,
-  body.has-cursor a,
-  body.has-cursor img,
-  body.has-cursor button { cursor: none; }
-}
-
-#cursor {
-  position: fixed;
-  top: 0; left: 0;
-  z-index: 200;
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;     /* centres it on the pointer */
-  display: none;
-  pointer-events: none;
-  will-change: transform;
-  mix-blend-mode: difference;
-  color: #fff;
-}
-
-body.has-cursor #cursor { display: block; }
-
-/* the dot */
-#cursor::before {
-  content: '';
-  position: absolute;
-  inset: 50%;
-  width: 7px; height: 7px;
-  margin: -3.5px;
-  border-radius: 50%;
-  background: currentColor;
-  transition: all 240ms ease;
-}
-
-/* the ring */
-#cursor::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  opacity: 0;
-  transform: scale(0.4);
-  transition: all 240ms ease;
-}
-
-/* landing — ring pulses out around the dot */
-#cursor.is-enter::after { opacity: 1; transform: scale(1); }
-
-/* over a link — dot grows */
-#cursor.is-link::before { width: 13px; height: 13px; margin: -6.5px; }
-
-/* over an image — dot hollows into a ring */
-#cursor.is-open::before { opacity: 0; }
-#cursor.is-open::after  { opacity: 1; transform: scale(0.8); }
-
-/* in focus — ring collapses back to a dot */
-#cursor.is-close::before { width: 11px; height: 11px; margin: -5.5px; }
-#cursor.is-close::after  { opacity: 1; transform: scale(0.45); }
-
-#cursor.is-scroll::before { width: 5px; height: 5px; margin: -2.5px; }
-#cursor.is-scroll::after  { opacity: 0.4; transform: scale(0.55); }
-
-/* ---- landing: nav hidden until the first click ---- */
-
+/* Landing — name and photo only, until the first click. */
 #project-index,
 #sidebar .meta { transition: opacity 500ms ease; }
 
@@ -234,167 +360,20 @@ body.is-landing #sidebar .meta {
   pointer-events: none;
 }
 
-/* ---- focus: clicking an image clears everything around it ---- */
-
+/* Focus — clicking an image clears everything around it, on
+   desktop and phone alike. Nothing left but the picture. */
 #sidebar,
+#bar,
 .col-text { transition: opacity 400ms ease; }
 
 body.is-focus #sidebar,
+body.is-focus #bar,
 body.is-focus .col-text {
   opacity: 0;
   pointer-events: none;
 }
 
-#menu-toggle {
-  display: none;                 /* mobile only */
-  position: fixed;
-  top: var(--pad);
-  right: var(--pad);
-  z-index: 40;
-  border: 0;
-  padding: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font: inherit;
-  cursor: pointer;
-}
-
-/* Hover line — sits in the text column, level with the hovered name. */
-#hover-meta {
-  position: fixed;
-  display: flex;
-  justify-content: space-between;
-  gap: 1em;
-  z-index: 30;
-  pointer-events: none;
-  color: var(--ink);
-  white-space: nowrap;
-}
-
-#hover-meta span { flex: 0 0 auto; }
-
-/* ---------- 4. layout ---------- */
-
-#main {
-  margin-left: var(--sidebar-w);
-  height: 100vh;
-  overflow: hidden;
-}
-
-.view {
-  display: grid;
-  grid-template-columns: minmax(240px, var(--col-text)) 1fr;
-  gap: var(--pad);
-  height: 100%;
-}
-
-/* Without this, a long word forces a column wider than its track. */
-.view > * { min-width: 0; }
-
-.col {
-  height: 100%;
-  min-width: 0;
-  padding: var(--pad);
-  overflow-y: auto;
-  overflow-wrap: break-word;
-}
-
-.col-text {
-  padding-right: 0;
-  padding-top: var(--top-align);
-}
-
-/* Media column: one image per screen, snapping as you scroll. */
-.col-content {
-  position: relative;
-  padding: 0 var(--pad) 0 0;
-  scroll-snap-type: y mandatory;
-  scroll-behavior: smooth;
-}
-
-/* One frame per screen. The image sits on the same top line as the
-   text column and never grows past --media-h / --media-w. */
-.frame {
-  margin: 0;
-  height: 100%;
-  padding-top: var(--top-align);
-  scroll-snap-align: start;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.frame img,\n.frame video {
-  width: auto;
-  max-width: min(100%, var(--media-w));
-  max-height: var(--media-h);
-  object-fit: contain;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .col-content { scroll-behavior: auto; }
-}
-
-/* ---------- 5. home ---------- */
-
-#home-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2.2em;
-}
-
-/* ---------- 6. project ---------- */
-
-/* Metadata stacks vertically above the description. */
-#project-meta { margin-bottom: var(--meta-gap); }
-
-#project-meta p {
-  margin: 0 0 var(--meta-gap);
-}
-
-#project-text p { margin: 0 0 0; }
-
-#project-images { display: contents; }
-
-#project-images figcaption {
-  align-self: flex-end;
-  margin-left: 1em;
-  color: var(--ink-soft);
-}
-
-#project-media:not(:empty) { height: 100%; scroll-snap-align: start; }
-
-/* ---------- 7. info ---------- */
-
-#info { grid-template-columns: 1fr; }
-
-#info > * {
-  height: 100%;
-  padding: var(--top-align) var(--pad) var(--pad);
-  overflow-y: auto;
-}
-
-.info-body { max-width: 42em; }
-
-.info-block { margin-bottom: 2.4em; }
-
-.info-block h2 {
-  font-size: var(--fs-body);
-  font-weight: 400;
-  margin: 0 0 0.6em;
-  color: var(--ink-soft);
-}
-
-.info-block p { margin: 0 0 1em; }
-
-.colophon { color: var(--ink-soft); }
-
-#error {
-  padding: var(--pad);
-  color: var(--ink-soft);
-}
-
-/* ---------- 8. mobile ---------- */
+/* ---------- 11. mobile ---------- */
 
 @media (max-width: 800px) {
 
@@ -403,65 +382,85 @@ body.is-focus .col-text {
     overflow: visible;
   }
 
-  #menu-toggle { display: block; }
+  body {
+    display: block;
+    padding: var(--gap);
+  }
 
+  /* Name left, "index" right — both stay put while you scroll. */
+  #bar {
+    display: flex;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 40;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: var(--gap);
+    background: var(--bg);
+  }
+
+  /* The desktop nav becomes the drop-down list. */
   #sidebar {
-    width: 100%;
-    height: auto;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 30;
     max-height: 100vh;
-    padding: var(--pad);
     overflow-y: auto;
-    border-bottom: 1px solid var(--rule);
-    transform: translateY(-100%);
-    transition: transform 220ms ease;
+    padding: calc(var(--gap) * 2.4) var(--gap) var(--gap);
+    background: var(--bg);
+    transform: translateY(-101%);
+    transition: transform 240ms ease;
   }
 
   #sidebar.open { transform: translateY(0); }
-  #sidebar .brand { position: static; }
+
+  /* The name is already in the bar — no second one. */
+  #sidebar .brand { display: none; }
+
+  #sidebar li { margin-bottom: 0.45em; }
+  #sidebar .meta { margin-top: 1.4em; }
+
+  /* Landing is a desktop idea; the list is always available here. */
+  body.is-landing #project-index,
+  body.is-landing #sidebar .meta {
+    opacity: 1;
+    pointer-events: auto;
+  }
 
   #main {
-    margin-left: 0;
     height: auto;
-    overflow: visible;
+    padding-top: calc(var(--gap) * 1.6);
   }
 
   .view {
-    grid-template-columns: 1fr;
+    display: block;
     height: auto;
   }
 
-  .col,
-  #info > * {
+  .col-text { margin: 0 0 var(--gap); }
+
+  .col-content {
     height: auto;
     overflow: visible;
-    padding: var(--pad);
   }
 
-  .col-text {
-    padding-right: var(--pad);
-    padding-top: calc(var(--pad) * 2.6);
-  }
+  /* Full width on a phone, portrait included. */
+  .frame.is-portrait { display: block; }
 
-  /* No snapping on a phone — images just stack. */
-  .col-content { scroll-snap-type: none; }
-
-  .frame {
-    height: auto;
-    padding-top: 0;
-    margin-bottom: 2.4em;
-  }
-
-  .frame img,\n.frame video {
-    max-width: 100%;
+  .frame.is-portrait img,
+  .frame.is-portrait video {
+    width: 100%;
     max-height: none;
   }
 
-  #info > * { padding-top: calc(var(--pad) * 2.6); }
-
-  /* Hover is a desktop idea. */
-  #hover-meta { display: none !important; }
+  /* The indicator stays — it tracks the page scroll here instead
+     of a column. Only the pointer-dependent pieces go. */
+  #hover-meta,
+  #cursor { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #sidebar { transition: none; }
+  #sidebar,
+  #project-index,
+  .col-text { transition: none; }
 }

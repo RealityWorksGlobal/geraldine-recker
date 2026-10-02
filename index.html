@@ -16,44 +16,44 @@
 </head>
 <body>
 
-<button id="menu-toggle" aria-label="Open index" aria-expanded="false">Index</button>
+<!-- Mobile only: the name stays put, "index" opens the list. -->
+<header id="bar">
+  <a class="brand" href="#" data-nav="home">géraldine recker</a>
+  <button id="menu-toggle" aria-label="Open index" aria-expanded="false">index</button>
+</header>
 
+<!-- Column 1. One continuous list: name, projects, info, contact. -->
 <nav id="sidebar" aria-label="Project index">
-  <a class="brand" href="#" data-nav="home">Géraldine Recker</a>
+  <a class="brand" href="#" data-nav="home">géraldine recker</a>
   <ul id="project-index"></ul>
   <ul class="meta">
-    <li><a href="#" data-nav="info">Info</a></li>
-    <li><a href="mailto:REPLACE@EMAIL.COM">Contact</a></li>
+    <li><a href="#" data-nav="info">info</a></li>
+    <li><a href="mailto:REPLACE@EMAIL.COM">contact</a></li>
   </ul>
 </nav>
 
 <main id="main">
 
   <section id="home" class="view">
-
-    <div class="col col-text">
-      <div id="home-list"></div>
-    </div>
-
-    <div class="col col-content">
+    <div class="col-text"></div>
+    <div class="col-content">
       <figure class="frame">
         <img id="cover-image" alt="">
       </figure>
     </div>
-
   </section>
 
   <section id="project" class="view" hidden>
 
-    <div class="col col-text">
+    <div class="col-text">
       <h1 id="project-title" class="sr-only"></h1>
       <div id="project-meta"></div>
       <div id="project-text"></div>
     </div>
 
-    <div class="col col-content">
-      <!-- The cover carries over from the nav, so opening a project
-           scrolls down from it rather than cutting to new content. -->
+    <div class="col-content">
+      <!-- Carries over the photo that was on screen, so opening a
+           project continues from it instead of cutting. -->
       <figure class="frame" id="project-cover">
         <img id="project-cover-image" alt="">
       </figure>
@@ -64,10 +64,11 @@
   </section>
 
   <section id="info" class="view" hidden>
-    <div class="info-body">
+    <div class="col-text">
       <div id="info-content"></div>
-      <p class="colophon">Site by <a href="mailto:studio@juliettemartin.org">Juliette Martin</a>.</p>
+      <p class="colophon">site by <a href="mailto:studio@juliettemartin.org">juliette martin</a></p>
     </div>
+    <div class="col-content"></div>
   </section>
 
   <div id="error" hidden>
@@ -82,7 +83,9 @@
   <span class="scroll-dot"></span>
 </div>
 
-<div id="cursor" aria-hidden="true"></div>
+<div id="cursor" aria-hidden="true">
+  <span class="cursor-label"></span>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="script.js"></script>
