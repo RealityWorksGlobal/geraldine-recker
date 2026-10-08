@@ -13,6 +13,17 @@
 <meta property="og:image" content="https://REPLACE-DOMAIN/assets/og.jpg">
 
 <link rel="stylesheet" href="styles.css">
+
+<!-- Landing state is set before anything is painted. Set later, the
+     project list would flash up for a frame and then fade away. The
+     condition matches the boot section of script.js. -->
+<script>
+  if (!location.hash &&
+      matchMedia('(hover: hover) and (pointer: fine)').matches &&
+      !matchMedia('(max-width: 800px)').matches) {
+    document.documentElement.classList.add('is-landing');
+  }
+</script>
 </head>
 <body>
 
@@ -37,7 +48,7 @@
   <section id="home" class="view">
     <div class="col-text"></div>
     <div class="col-content">
-      <figure class="frame">
+      <figure class="frame" id="home-cover">
         <img id="cover-image" alt="">
       </figure>
     </div>
@@ -68,7 +79,12 @@
       <div id="info-content"></div>
       <p class="colophon">site by <a href="mailto:studio@juliettemartin.org">juliette martin</a></p>
     </div>
-    <div class="col-content"></div>
+    <div class="col-content">
+      <!-- Empty until a project title is hovered from the info page. -->
+      <figure class="frame" id="info-cover" hidden>
+        <img alt="">
+      </figure>
+    </div>
   </section>
 
   <div id="error" hidden>

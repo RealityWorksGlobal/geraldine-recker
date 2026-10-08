@@ -1,11 +1,12 @@
 /* ============================================================
    Géraldine Recker
-   1 tokens · 2 font · 3 base · 4 grid · 5 nav
-   6 media · 7 text · 8 cursor · 9 scroll · 10 states · 11 mobile
+   1 tokens · 2 font · 3 base · 4 grid · 5 nav · 6 media
+   7 text · 8 cursor · 9 scroll · 10 states · 11 mobile
 
    One 8-column grid holds the page. --gap is the only spacing
    value: outer margin, gutters, and the space between stacked
-   images are all the same number.
+   images are all the same number. Everything is black; weight
+   carries all emphasis.
    ============================================================ */
 
 /* ---------- 1. tokens ---------- */
@@ -13,13 +14,12 @@
 :root {
   --bg: #ffffff;
   --ink: #111111;
-  --ink-soft: #767676;
 
   --cols: 8;
   --gap: 30px;            /* the only spacing value on the page */
 
   --col-nav: 1 / 2;       /* nav */
-  --col-text: 1 / 3;      /* description, bottom-aligned */
+  --col-text: 1 / 3;      /* description, on the bottom margin */
   --col-media: 5 / -1;    /* images */
 
   --meta-col: 2;          /* hover line starts at this column's left edge */
@@ -29,6 +29,9 @@
 
   --fs-body: 14px;
   --lh-body: 1.3;
+
+  --lh-nav: 1.35;         /* nav line height — fixed, see section 5 */
+  --nav-gap: 0.15em;      /* extra space between project titles */
 
   --dot: 7px;             /* cursor and scroll indicator, same size */
   --cursor-opacity: 0.5;
@@ -44,10 +47,31 @@
   font-display: swap;
 }
 
+/* In Suisse Int'l, Book is lighter than Regular. */
 @font-face {
   font-family: "Suisse Intl";
   src: url("fonts/SuisseIntl-Book.woff2") format("woff2");
-  font-weight: 450;
+  font-weight: 350;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Name, info, contact, hover. Needs fonts/SuisseIntl-SemiBold.woff2. */
+@font-face {
+  font-family: "Suisse Intl";
+  src: url("fonts/SuisseIntl-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* The open project. Needs fonts/SuisseIntl-Bold.woff2 — without a
+   real cut the browser smears the Regular, which looks like a
+   printing fault on a grotesk. */
+@font-face {
+  font-family: "Suisse Intl";
+  src: url("fonts/SuisseIntl-Bold.woff2") format("woff2");
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
@@ -133,12 +157,42 @@ body {
 /* ---------- 5. nav ---------- */
 
 #sidebar ul { list-style: none; margin: 0; padding: 0; }
-#sidebar li { margin: 0; }
-#sidebar .brand { display: block; }
-#sidebar a.active { text-decoration: underline; }
+#sidebar li { margin: 0 0 var(--nav-gap); }
 
-#project-index:hover a { color: var(--ink-soft); }
-#project-index a:hover { color: var(--ink); }
+#sidebar a {
+  display: block;
+  line-height: var(--lh-nav);
+}
+
+/* Name, info and contact: always semibold, whatever page is open. */
+#sidebar .brand,
+#sidebar .meta a { font-weight: 600; }
+
+#sidebar .brand { margin-bottom: var(--nav-gap); }
+
+/* Projects: regular at rest, semibold under the cursor, bold when
+   open. Weight alone — no grey, no underline. */
+#project-index a { font-weight: 400; }
+#project-index a:hover { font-weight: 600; }
+#project-index a.active { font-weight: 700; }
+
+/* Weight changes width, and a title that fits on one line in regular
+   can wrap in bold — the whole list below would jump a line. So the
+   visible title and an invisible bold copy share one grid cell: the
+   box is always sized for the widest version, and never moves. */
+#project-index a { display: grid; }
+
+#project-index a > span,
+#project-index a::after {
+  grid-area: 1 / 1;
+}
+
+#project-index a::after {
+  content: attr(data-label);
+  font-weight: 700;
+  visibility: hidden;
+  pointer-events: none;
+}
 
 #menu-toggle {
   border: 0;
@@ -146,6 +200,7 @@ body {
   background: none;
   color: var(--ink);
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -160,8 +215,7 @@ body {
   overscroll-behavior: contain;
 }
 
-/* Continuous scroll, no snapping. Spacing between images is the
-   same --gap as every other interval on the page. */
+/* Continuous scroll, no snapping. */
 .frame {
   margin: 0 0 var(--gap);
   display: block;
@@ -176,9 +230,8 @@ body {
   height: auto;
 }
 
-/* Portrait would be absurdly tall at four columns, so it's capped
-   by height instead and centred across the span. JS tags the frame
-   once the file reports its dimensions. */
+/* Portrait is capped by height and centred across the span. JS tags
+   the frame the moment the file reports its dimensions. */
 .frame.is-portrait {
   display: flex;
   justify-content: center;
@@ -195,18 +248,41 @@ body {
 
 #project-images figcaption {
   margin-top: calc(var(--gap) / 3);
-  color: var(--ink-soft);
 }
+
+/* Previewing another project from inside one: the media column shows
+   only the hovered project's cover, never the open project's images
+   beneath it. The text stays. */
+body.is-previewing #project-images,
+body.is-previewing #project-media { display: none; }
 
 /* ---------- 7. text ---------- */
 
-/* Description sits on the bottom line, columns 1–2. */
+/* Description on the bottom margin, columns 1–2 — the same cell the
+   nav occupies. --text-top is the nav's measured height, so a long
+   description scrolls in the space below the list instead of
+   climbing over it. */
 .col-text {
   grid-column: var(--col-text);
   grid-row: 1;
-  align-self: end;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
+  padding-top: var(--text-top, 0px);
+  overflow-y: auto;
   overflow-wrap: break-word;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Pushes the content down to the bottom margin. A pseudo-element,
+   because the first real child can be the screen-reader heading,
+   which is out of the flow. An auto margin rather than flex-end,
+   which would clip the top of an overlong text. */
+.col-text::before {
+  content: '';
+  margin-top: auto;
+  flex: 0 0 auto;
 }
 
 /* Year / type / medium, stacked above the description. */
@@ -219,24 +295,20 @@ body {
 .info-block { margin-bottom: 1em; }
 .info-block h2 {
   font-size: inherit;
-  font-weight: 400;
+  font-weight: 600;
   margin: 0;
-  color: var(--ink-soft);
 }
 .info-block p { margin: 0; }
 
-.colophon { margin: 0; color: var(--ink-soft); }
+.colophon { margin: 0; }
 
 #error {
   grid-column: var(--col-text);
   align-self: end;
-  color: var(--ink-soft);
 }
 
-/* The year / type / medium line. Starts at the left edge of
-   --meta-col and spans --meta-span columns — the three parts
-   spread evenly across that width. JS places it level with
-   whichever project name is hovered. */
+/* The year / type / medium line, level with the hovered title,
+   spread across --meta-span columns from --meta-col. */
 #hover-meta {
   position: fixed;
   display: flex;
@@ -245,6 +317,7 @@ body {
   z-index: 30;
   pointer-events: none;
   white-space: nowrap;
+  line-height: var(--lh-nav);
 }
 
 #hover-meta span { flex: 0 0 auto; }
@@ -259,34 +332,38 @@ body {
   body.has-cursor button { cursor: none; }
 }
 
-/* The dot itself is ::before; the label sits beside it and only
-   appears over media, before a click. */
+/* The box is the dot's height, offset by half a dot, so the pointer
+   sits at the dot's centre and the label centres on the same line. */
 #cursor {
   position: fixed;
   top: 0; left: 0;
   z-index: 200;
   display: none;
   align-items: center;
+  height: var(--dot);
+  margin: calc(var(--dot) / -2) 0 0 calc(var(--dot) / -2);
   gap: 0.8em;
   opacity: var(--cursor-opacity);
   pointer-events: none;
   will-change: transform;
+  transition: opacity 200ms ease;
 }
 
 body.has-cursor #cursor { display: flex; }
+#cursor.is-away { opacity: 0; }
 
 #cursor::before {
   content: '';
   flex: 0 0 auto;
   width: var(--dot);
   height: var(--dot);
-  margin: calc(var(--dot) / -2) 0 0 calc(var(--dot) / -2);
   border-radius: 50%;
   background: var(--ink);
 }
 
 .cursor-label {
   white-space: nowrap;
+  line-height: 1;
   opacity: 0;
   transform: translateX(-4px);
   transition: opacity 200ms ease, transform 200ms ease;
@@ -297,12 +374,9 @@ body.has-cursor #cursor { display: flex; }
   transform: translateX(0);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .cursor-label { transition: none; }
-}
-
 /* ---------- 9. scroll indicator ---------- */
 
+/* Native bars off, so no column ever changes width. */
 .col-content,
 .col-text {
   scrollbar-width: none;
@@ -354,14 +428,13 @@ body.is-focus #scrollbar { opacity: 0; }
 #project-index,
 #sidebar .meta { transition: opacity 500ms ease; }
 
-body.is-landing #project-index,
-body.is-landing #sidebar .meta {
+.is-landing #project-index,
+.is-landing #sidebar .meta {
   opacity: 0;
   pointer-events: none;
 }
 
-/* Focus — clicking an image clears everything around it, on
-   desktop and phone alike. Nothing left but the picture. */
+/* Focus — clicking an image clears everything around it. */
 #sidebar,
 #bar,
 .col-text { transition: opacity 400ms ease; }
@@ -399,6 +472,8 @@ body.is-focus .col-text {
     background: var(--bg);
   }
 
+  #bar .brand { font-weight: 600; }
+
   /* The desktop nav becomes the drop-down list. */
   #sidebar {
     position: fixed;
@@ -414,15 +489,14 @@ body.is-focus .col-text {
 
   #sidebar.open { transform: translateY(0); }
 
-  /* The name is already in the bar — no second one. */
+  /* The name is already in the bar. */
   #sidebar .brand { display: none; }
 
-  #sidebar li { margin-bottom: 0.45em; }
   #sidebar .meta { margin-top: 1.4em; }
 
   /* Landing is a desktop idea; the list is always available here. */
-  body.is-landing #project-index,
-  body.is-landing #sidebar .meta {
+  .is-landing #project-index,
+  .is-landing #sidebar .meta {
     opacity: 1;
     pointer-events: auto;
   }
@@ -437,7 +511,17 @@ body.is-focus .col-text {
     height: auto;
   }
 
-  .col-text { margin: 0 0 var(--gap); }
+  /* The desktop text column is pinned to the bottom and padded for
+     the nav. On a phone it is just text, in the flow. */
+  .col-text {
+    display: block;
+    height: auto;
+    padding-top: 0;
+    overflow: visible;
+    margin: 0 0 var(--gap);
+  }
+
+  .col-text::before { display: none; }
 
   .col-content {
     height: auto;
@@ -453,14 +537,17 @@ body.is-focus .col-text {
     max-height: none;
   }
 
-  /* The indicator stays — it tracks the page scroll here instead
-     of a column. Only the pointer-dependent pieces go. */
   #hover-meta,
   #cursor { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   #sidebar,
+  #bar,
   #project-index,
-  .col-text { transition: none; }
+  #sidebar .meta,
+  .col-text,
+  #cursor,
+  .cursor-label,
+  #scrollbar { transition: none; }
 }

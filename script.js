@@ -3,11 +3,16 @@
  * Sheet columns are matched by header NAME, not position, so columns
  * can be dragged around freely. FIELDS maps each internal field to
  * the header that feeds it. Headers are stripped to letters and
- * digits before matching, so "Project Title", "project-title" and
+ * digits before matching: "Project Title", "project-title" and
  * "projecttitle" are the same thing.
  *
  * Only a title is required; everything else is optional.
+ *
+ * Sections: config · helpers · media · state · render · hover ·
+ * focus · cursor · scroll indicator · videos · routing · boot
  */
+
+/* ---------- config ---------- */
 
 var CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGHShozHpH9zqXji89-kkpWgNqBSE0-5qX_duOtUYPBBpIHzHEmXbUT5Tw1qXdmA8yxQvS0tjAlqUI/pub?gid=0&single=true&output=csv';
 var INFO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGHShozHpH9zqXji89-kkpWgNqBSE0-5qX_duOtUYPBBpIHzHEmXbUT5Tw1qXdmA8yxQvS0tjAlqUI/pub?gid=1054162112&single=true&output=csv';
@@ -26,7 +31,14 @@ var FIELDS = {
   captions:    ['captions']
 };
 
-var COVER_INTERVAL = 2000;   // landing cycle, ms
+var COVER_INTERVAL = 2000;               // landing cycle, ms
+var CURSOR_LABEL = '[click for silence]';
+
+// A real mouse. Phones and tablets get no hover, no custom cursor
+// and no landing — a tap there should do what it says.
+var FINE_POINTER = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+var MOBILE_QUERY = window.matchMedia('(max-width: 800px)');
+function isMobile() { return MOBILE_QUERY.matches; }
 
 var projects = [];
 
@@ -59,7 +71,7 @@ function pick(row, field) {
 function slugify(s) {
   return String(s)
     .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
@@ -84,9 +96,16 @@ function isVideo(name) {
   return /\.(mp4|mov|webm|m4v)(\?|$)/i.test(String(name).trim());
 }
 
-// Year, type, medium — the three parts of the hover line.
+// Year, type, medium.
 function metaBits(p) {
   return [p.year, p.type, p.medium].filter(Boolean);
+}
+
+function findProject(slug) {
+  for (var i = 0; i < projects.length; i++) {
+    if (projects[i].slug === slug) return projects[i];
+  }
+  return null;
 }
 
 function paragraphs(into, text) {
@@ -100,31 +119,121 @@ function paragraphs(into, text) {
   });
 }
 
-function markReady() {
-  document.body.classList.add('is-ready');
-}
-
 function fail(msg) {
   el('project-index').innerHTML = '';
   var box = el('error');
   box.hidden = false;
   box.querySelector('p').textContent = msg;
-  markReady();
 }
 
-/* Portrait images are capped by height rather than width, so the
-   frame needs to know the orientation. Natural dimensions aren't
-   available until the file reports them. */
-function tagOrientation(node, frame) {
+/* ---------- media ---------- */
+
+/* Swaps what a cover frame shows — a still or a clip — safely.
+ *
+ * Every request is remembered on the frame; when the file is ready
+ * it is only shown if it is still the latest one asked for. Without
+ * this, hovering A then B quickly could end on A, whichever file
+ * happened to arrive last.
+ *
+ * The new file is loaded off-screen and only swapped in once it can
+ * be drawn, so the frame never goes blank, and orientation is set in
+ * the same step so a portrait never flashes at landscape width.
+ *
+ * A clip loads into a fresh <video> that replaces the old one, so
+ * the file is only downloaded once. */
+function swapMedia(frame, path) {
+  if (!frame) return;
+  var img = frame.querySelector('img');
+  var url = imgURL(path);
+  frame.dataset.want = url;
+
+  if (!url) { clearMedia(frame); frame.hidden = true; return; }
+
+  frame.hidden = false;
+  if (frame.dataset.shown === url) return;
+
+  function reveal(w, h, show) {
+    if (frame.dataset.want !== url) return false;     // a newer request won
+    frame.classList.toggle('is-portrait', h > w);
+    show();
+    frame.dataset.shown = url;
+    return true;
+  }
+
+  if (isVideo(path)) {
+    var vid = document.createElement('video');
+    vid.muted = true;
+    vid.loop = true;
+    vid.playsInline = true;
+    vid.setAttribute('muted', '');
+    vid.setAttribute('playsinline', '');
+    vid.preload = 'auto';
+
+    vid.addEventListener('loadeddata', function () {
+      reveal(vid.videoWidth, vid.videoHeight, function () {
+        removeVideo(frame);
+        img.hidden = true;
+        frame.appendChild(vid);
+        var p = vid.play();
+        if (p && p.catch) p.catch(function () {});
+      });
+    }, { once: true });
+
+    vid.addEventListener('error', function () {
+      if (frame.dataset.want === url) console.warn('Clip not found:', url);
+    }, { once: true });
+
+    vid.src = url;
+    return;
+  }
+
+  var loader = new Image();
+  loader.onload = function () {
+    reveal(loader.naturalWidth, loader.naturalHeight, function () {
+      removeVideo(frame);
+      img.src = url;
+      img.hidden = false;
+    });
+  };
+  loader.onerror = function () {
+    if (frame.dataset.want === url) console.warn('Image not found:', url);
+  };
+  loader.src = url;
+}
+
+function removeVideo(frame) {
+  var old = frame.querySelector('video');
+  if (!old) return;
+  old.pause();
+  old.removeAttribute('src');
+  old.load();                 // releases the download
+  old.remove();
+}
+
+// Empties a frame at once — used when opening a project, so the
+// previous project's lead is never on screen while the new one loads.
+function clearMedia(frame) {
+  removeVideo(frame);
+  var img = frame.querySelector('img');
+  img.removeAttribute('src');
+  img.hidden = false;
+  frame.dataset.shown = '';
+}
+
+// For content that is built once and never swapped: tag orientation
+// the first time the file reports its size. One listener, removed
+// after it fires.
+function tagOnce(node, frame) {
   function check() {
     var w = node.naturalWidth || node.videoWidth;
     var h = node.naturalHeight || node.videoHeight;
-    if (!w || !h) return;
-    frame.classList.toggle('is-portrait', h > w);
+    if (w && h) frame.classList.toggle('is-portrait', h > w);
   }
-  check();
-  node.addEventListener('load', check);
-  node.addEventListener('loadedmetadata', check);
+  if ((node.naturalWidth || node.videoWidth)) { check(); return; }
+  node.addEventListener(node.tagName === 'VIDEO' ? 'loadedmetadata' : 'load', check, { once: true });
+  node.addEventListener('error', function () {
+    console.warn('Media not found:', node.currentSrc || node.src);
+  }, { once: true });
 }
 
 /* ---------- state ---------- */
@@ -132,46 +241,11 @@ function tagOrientation(node, frame) {
 var coverPool = [];
 var coverIndex = 0;
 var coverTimer = null;
-var currentCover = '';     // the photo on screen right now
+var currentCover = '';     // the photo last shown on home
+var openSlug = '';         // the project currently open, if any
+var openLead = '';         // that project's own lead image
 var landingOver = false;
 var hoverArmed = true;
-
-/* ---------- cover photo ---------- */
-
-function buildCoverPool() {
-  coverPool = [];
-  projects.forEach(function (p) {
-    p.covers.forEach(function (c) { coverPool.push(c); });
-  });
-}
-
-// Loads into memory first, then swaps — no flash of empty frame.
-function setCover(path) {
-  if (!path) return;
-  currentCover = path;
-  var img = el('cover-image');
-  var loader = new Image();
-  loader.onload = function () {
-    img.src = loader.src;
-    tagOrientation(img, img.closest('.frame'));
-  };
-  loader.src = imgURL(path);
-}
-
-function advanceCover() {
-  if (coverPool.length < 2) return;
-  coverIndex = (coverIndex + 1) % coverPool.length;
-  setCover(coverPool[coverIndex]);
-}
-
-// First click anywhere: photo freezes, nav fades in.
-function endLanding() {
-  if (landingOver) return;
-  landingOver = true;
-  clearInterval(coverTimer);
-  coverTimer = null;
-  document.body.classList.remove('is-landing');
-}
 
 /* ---------- render ---------- */
 
@@ -181,12 +255,37 @@ function renderIndex() {
   projects.forEach(function (p) {
     var li = document.createElement('li');
     var a = document.createElement('a');
+    var span = document.createElement('span');
+
     a.href = '#' + p.slug;
-    a.textContent = p.title;
     a.dataset.slug = p.slug;
+    // The invisible bold copy the CSS uses to hold the box steady.
+    a.dataset.label = p.title;
+    span.textContent = p.title;
+
+    a.appendChild(span);
     li.appendChild(a);
     ul.appendChild(li);
   });
+}
+
+function buildCoverPool() {
+  coverPool = [];
+  projects.forEach(function (p) {
+    p.covers.forEach(function (c) { coverPool.push(c); });
+  });
+}
+
+function setCover(path) {
+  if (!path) return;
+  currentCover = path;
+  swapMedia(el('home-cover'), path);
+}
+
+function advanceCover() {
+  if (coverPool.length < 2) return;
+  coverIndex = (coverIndex + 1) % coverPool.length;
+  setCover(coverPool[coverIndex]);
 }
 
 function renderHome() {
@@ -195,7 +294,11 @@ function renderHome() {
 
   setCover(coverPool[0]);
 
+  // Warm the cache so the cycle and hover swaps are instant. Stills
+  // only — preloading every clip in full would be heavy, and a clip
+  // starts drawing from its first frames anyway.
   coverPool.forEach(function (c) {
+    if (isVideo(c)) return;
     var pre = new Image();
     pre.src = imgURL(c);
   });
@@ -206,6 +309,8 @@ function renderHome() {
 }
 
 function renderProject(p) {
+  openSlug = p.slug;
+
   el('project-title').textContent = p.title;
 
   // Year / type / medium, one line each, above the description.
@@ -219,12 +324,17 @@ function renderProject(p) {
 
   paragraphs(el('project-text'), p.description);
 
-  // The cover already on screen leads the column, so opening a
-  // project continues from it rather than cutting.
-  var lead = currentCover || p.covers[0] || p.images[0];
-  var coverImg = el('project-cover-image');
-  coverImg.src = lead ? imgURL(lead) : '';
-  tagOrientation(coverImg, el('project-cover'));
+  // The lead image. If the photo on screen belongs to this project
+  // it carries straight through; otherwise the project's own cover.
+  // A photo from another project can never lead.
+  var own = p.covers.concat(p.images);
+  openLead = (currentCover && own.indexOf(currentCover) > -1) ? currentCover : (p.covers[0] || '');
+
+  // Clear first, so the previous project's lead is never on screen
+  // for even a moment while the new one loads.
+  var leadFrame = el('project-cover');
+  clearMedia(leadFrame);
+  swapMedia(leadFrame, openLead);
 
   var box = el('project-images');
   box.innerHTML = '';
@@ -237,7 +347,6 @@ function renderProject(p) {
     if (isVideo(name)) {
       // Muted autoplay loop, no controls — behaves like a still.
       media = document.createElement('video');
-      media.src = imgURL(name);
       media.muted = true;
       media.loop = true;
       media.playsInline = true;
@@ -246,16 +355,17 @@ function renderProject(p) {
       media.setAttribute('playsinline', '');
       media.preload = i === 0 ? 'auto' : 'metadata';
       media.setAttribute('aria-label', p.captions[i] || p.title);
+      media.src = imgURL(name);
     } else {
       media = document.createElement('img');
-      media.src = imgURL(name);
       media.alt = p.captions[i] || p.title;
       media.loading = i === 0 ? 'eager' : 'lazy';
       media.decoding = 'async';
+      media.src = imgURL(name);
     }
 
     fig.appendChild(media);
-    tagOrientation(media, fig);
+    tagOnce(media, fig);
 
     if (p.captions[i]) {
       var cap = document.createElement('figcaption');
@@ -266,14 +376,9 @@ function renderProject(p) {
     box.appendChild(fig);
   });
 
-  document.title = 'Géraldine Recker — ' + p.title;
-}
+  watchVideos(box);
 
-// Opening a project puts you back at the cover; the scroll is the
-// visitor's to make.
-function resetMediaScroll() {
-  var col = document.querySelector('#project .col-content');
-  if (col) col.scrollTop = 0;
+  document.title = 'Géraldine Recker — ' + p.title;
 }
 
 // One block per row: "title" is the heading, "content" the body,
@@ -308,16 +413,44 @@ function renderInfo(rows) {
       }
       box.appendChild(block);
     });
+
+  alignText();
+}
+
+/* The description shares columns 1–2 with the nav. This reserves
+   the nav's real height at the top of that column, so a long text
+   scrolls in the space below the list rather than overlapping it.
+   Measured, so it follows the list's length, --gap and the font. */
+function alignText() {
+  if (isMobile()) {
+    document.documentElement.style.setProperty('--text-top', '0px');
+    return;
+  }
+  var nav = el('sidebar');
+  if (!nav) return;
+  var gap = parseFloat(getComputedStyle(document.body).rowGap) || 0;
+  var h = nav.getBoundingClientRect().height;
+  document.documentElement.style.setProperty('--text-top', (h + gap) + 'px');
 }
 
 /* ---------- hover ---------- */
 
+/* Hovering a project title:
+ *  - always shows its year / type / medium beside the title;
+ *  - on home, swaps the cover photo (and it stays after you leave);
+ *  - inside an open project, previews the hovered cover in place of
+ *    the open project's images — the text you're reading stays put —
+ *    and restores the open project when the cursor leaves the list.
+ *
+ * After a click, hover is disarmed until the cursor leaves the nav,
+ * so the project you just opened isn't replaced by the title the
+ * cursor is still resting on. */
 function wireHover() {
+  if (!FINE_POINTER) return;
+
   var list = el('project-index');
   var meta = el('hover-meta');
 
-  // Clicking disarms hover, so the project you just opened isn't
-  // wiped by the cursor still resting on its name.
   list.addEventListener('click', function (e) {
     var a = e.target.closest('a[data-slug]');
     if (!a) return;
@@ -332,50 +465,61 @@ function wireHover() {
     var a = e.target.closest('a[data-slug]');
     if (!a) return;
 
-    var p = projects.filter(function (x) { return x.slug === a.dataset.slug; })[0];
+    var p = findProject(a.dataset.slug);
     if (!p) return;
 
-    // The metadata line always previews, even while reading a
-    // project — it costs nothing and answers "what is this one?".
-    var bits = metaBits(p);
-    if (bits.length) {
-      meta.innerHTML = '';
-      bits.forEach(function (b) {
-        var s = document.createElement('span');
-        s.textContent = b;
-        meta.appendChild(s);
-      });
-      placeMeta(a);
-      meta.hidden = false;
-    } else {
-      meta.hidden = true;
-    }
+    showMeta(p, a);
 
-    // Swapping the photo is the heavier move, and it waits until
-    // hover re-arms. It also only applies on the home view — while
-    // a project is open, hovering previews the line and nothing
-    // else, so what you're reading stays on screen.
     if (!hoverArmed) return;
-    if (el('project').hidden === false) return;
 
     var shot = p.covers[0] || p.images[0];
-    if (shot) setCover(shot);
+    var projectOpen = !el('project').hidden;
+    var infoOpen = !el('info').hidden;
+
+    if (infoOpen) {
+      // Info has no image of its own: the hovered cover appears in
+      // the media column, and goes again when the cursor leaves.
+      if (shot) swapMedia(el('info-cover'), shot);
+      return;
+    }
+
+    if (projectOpen) {
+      if (p.slug === openSlug) { endPreview(); return; }
+      if (!shot) return;
+      startPreview(shot);
+    } else if (shot) {
+      setCover(shot);
+    }
   });
 
   list.addEventListener('mouseleave', function () {
     meta.hidden = true;
+    endPreview();
+    clearInfoCover();
   });
 
-  // Re-arms only once the cursor has left the whole nav.
   el('sidebar').addEventListener('mouseleave', function () {
     hoverArmed = true;
   });
 }
 
-/* Positions the hover line level with the hovered name: starts at
-   the left edge of --meta-col and spans --meta-span columns.
-   Measured off the live grid, so it follows any change to --gap or
-   --cols without edits here. */
+function showMeta(p, link) {
+  var meta = el('hover-meta');
+  var bits = metaBits(p);
+  if (!bits.length) { meta.hidden = true; return; }
+
+  meta.innerHTML = '';
+  bits.forEach(function (b) {
+    var s = document.createElement('span');
+    s.textContent = b;
+    meta.appendChild(s);
+  });
+  placeMeta(link);
+  meta.hidden = false;
+}
+
+/* Level with the hovered title, from --meta-col across --meta-span
+   columns. Measured off the live grid. */
 function placeMeta(link) {
   var meta = el('hover-meta');
   var view = document.querySelector('.view:not([hidden])');
@@ -391,14 +535,10 @@ function placeMeta(link) {
   var span = parseInt(root.getPropertyValue('--meta-span'), 10) || 2;
 
   var left = box.left;
-  for (var i = 0; i < col - 1 && i < tracks.length; i++) {
-    left += tracks[i] + gap;
-  }
+  for (var i = 0; i < col - 1 && i < tracks.length; i++) left += tracks[i] + gap;
 
   var width = 0;
-  for (var j = col - 1; j < col - 1 + span && j < tracks.length; j++) {
-    width += tracks[j] + gap;
-  }
+  for (var j = col - 1; j < col - 1 + span && j < tracks.length; j++) width += tracks[j] + gap;
   width -= gap;
 
   meta.style.top = link.getBoundingClientRect().top + 'px';
@@ -406,20 +546,51 @@ function placeMeta(link) {
   meta.style.width = width + 'px';
 }
 
-/* ---------- image focus ---------- */
+var previewScroll = 0;
 
-// Clicking an image clears the nav and text around it; the next
-// click anywhere brings them back. Capture phase, so the very first
-// click of a session goes to endLanding instead.
+function startPreview(shot) {
+  var col = document.querySelector('#project .col-content');
+  if (!document.body.classList.contains('is-previewing')) {
+    previewScroll = col ? col.scrollTop : 0;
+    document.body.classList.add('is-previewing');
+  }
+  if (col) col.scrollTop = 0;
+  swapMedia(el('project-cover'), shot);
+}
+
+function endPreview() {
+  if (!document.body.classList.contains('is-previewing')) return;
+  document.body.classList.remove('is-previewing');
+  swapMedia(el('project-cover'), openLead);
+  var col = document.querySelector('#project .col-content');
+  if (col) col.scrollTop = previewScroll;
+}
+
+function clearInfoCover() {
+  var f = el('info-cover');
+  if (!f) return;
+  f.dataset.want = '';       // cancels anything still loading
+  clearMedia(f);
+  f.hidden = true;
+}
+
+/* ---------- focus ---------- */
+
+// Clicking an image clears everything around it; the next click
+// anywhere brings it back. Escape works too. Capture phase, so the
+// very first click of a session goes to the landing instead.
 function wireFocus() {
   document.addEventListener('click', function (e) {
     if (document.body.classList.contains('is-focus')) {
       document.body.classList.remove('is-focus');
+      e.preventDefault();
+      e.stopPropagation();
       return;
     }
     if (!landingOver) return;
     if (e.target.closest('.frame img, .frame video')) {
       document.body.classList.add('is-focus');
+      el('hover-meta').hidden = true;
     }
   }, true);
 
@@ -430,12 +601,10 @@ function wireFocus() {
 
 /* ---------- cursor ---------- */
 
-// A dot following the pointer. Over an image it picks up a label,
-// since clicking there clears the page and that isn't guessable.
-var CURSOR_LABEL = '[click for silence]';
-
+// A dot that trails the pointer. Over an image, once the landing is
+// over, it says what a click there does — it isn't guessable.
 function wireCursor() {
-  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  if (!FINE_POINTER) return;
 
   var cursor = el('cursor');
   if (!cursor) return;
@@ -443,84 +612,120 @@ function wireCursor() {
 
   document.body.classList.add('has-cursor');
 
-  var x = window.innerWidth / 2, y = window.innerHeight / 2;
+  var x = -100, y = -100;
   var cx = x, cy = y;
   var over = false;
   var shown = false;
+  var running = false;
 
   document.addEventListener('mousemove', function (e) {
     x = e.clientX;
     y = e.clientY;
     over = !!(e.target.closest && e.target.closest('.frame img, .frame video'));
+    cursor.classList.remove('is-away');
+    if (!running) { running = true; requestAnimationFrame(frame); }
+  });
+
+  document.documentElement.addEventListener('mouseleave', function () {
+    cursor.classList.add('is-away');
   });
 
   function frame() {
-    // Trails slightly, so it reads as an object rather than paint.
     cx += (x - cx) * 0.2;
     cy += (y - cy) * 0.2;
     cursor.style.transform = 'translate(' + cx + 'px, ' + cy + 'px)';
 
-    // Only before the click — once everything is cleared, the
-    // label would be describing something already done.
-    var want = over && !document.body.classList.contains('is-focus');
+    var want = over && landingOver && !document.body.classList.contains('is-focus');
     if (want !== shown) {
       shown = want;
       if (label) label.textContent = want ? CURSOR_LABEL : '';
       cursor.classList.toggle('has-label', want);
     }
 
+    // Rest once the dot has caught up; the next mousemove wakes it.
+    if (Math.abs(x - cx) < 0.1 && Math.abs(y - cy) < 0.1) {
+      running = false;
+      return;
+    }
     requestAnimationFrame(frame);
   }
-
-  requestAnimationFrame(frame);
 }
 
 /* ---------- scroll indicator ---------- */
 
-// A dot travelling down a hairline at the right edge. Indicator
-// only — not draggable.
+// A dot on a hairline at the right edge. Indicator only. On desktop
+// it follows the media column; on a phone, the page.
 function wireScrollbar() {
   var bar = el('scrollbar');
   if (!bar) return;
   var dot = bar.querySelector('.scroll-dot');
   if (!dot) return;
 
-  // On desktop a column scrolls; on a phone the page itself does.
-  // Both expose scrollTop / scrollHeight / clientHeight, so the
-  // same maths drives the dot either way.
+  var lastY = -1;
+  var lastLive = null;
+
   function activeColumn() {
-    var view = document.querySelector('.view:not([hidden])');
-    if (view) {
-      var cols = view.querySelectorAll('.col-content');
-      for (var i = 0; i < cols.length; i++) {
-        if (cols[i].scrollHeight - cols[i].clientHeight > 4) return cols[i];
-      }
+    if (!isMobile()) {
+      var view = document.querySelector('.view:not([hidden])');
+      var col = view && view.querySelector('.col-content');
+      if (col && col.scrollHeight - col.clientHeight > 4) return col;
+      return null;
     }
     var doc = document.scrollingElement || document.documentElement;
-    if (doc && doc.scrollHeight - doc.clientHeight > 4) return doc;
-    return null;
+    return (doc.scrollHeight - doc.clientHeight > 4) ? doc : null;
   }
 
+  // Polled rather than event-driven: lazy images change the column's
+  // height as they arrive, and no scroll event reports that. Writes
+  // only happen when something actually moved.
   function update() {
     var col = activeColumn();
+    var live = !!col;
 
-    if (!col) {
-      bar.classList.remove('is-live');
-      requestAnimationFrame(update);
-      return;
+    if (live !== lastLive) {
+      bar.classList.toggle('is-live', live);
+      lastLive = live;
     }
 
-    bar.classList.add('is-live');
+    if (live) {
+      var max = col.scrollHeight - col.clientHeight;
+      var y = Math.round((max > 0 ? col.scrollTop / max : 0) * (bar.clientHeight - dot.offsetHeight));
+      if (y !== lastY) {
+        dot.style.transform = 'translateY(' + y + 'px)';
+        lastY = y;
+      }
+    }
 
-    var max = col.scrollHeight - col.clientHeight;
-    var progress = max > 0 ? col.scrollTop / max : 0;
-    var travel = bar.clientHeight - dot.offsetHeight;
-
-    dot.style.transform = 'translateY(' + (progress * travel) + 'px)';
     requestAnimationFrame(update);
   }
 
   requestAnimationFrame(update);
+}
+
+/* ---------- videos ---------- */
+
+// Clips play only while on screen. Off-screen ones, and the open
+// project's clips hidden during a hover preview, are paused.
+var videoWatch = window.IntersectionObserver
+  ? new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        var v = en.target;
+        if (en.isIntersecting) {
+          var p = v.play();
+          if (p && p.catch) p.catch(function () {});
+        } else {
+          v.pause();
+        }
+      });
+    }, { threshold: 0.1 })
+  : null;
+
+function watchVideos(root) {
+  if (!videoWatch) return;
+  videoWatch.disconnect();
+  Array.prototype.forEach.call(root.querySelectorAll('video'), function (v) {
+    videoWatch.observe(v);
+  });
 }
 
 /* ---------- routing ---------- */
@@ -529,49 +734,79 @@ function show(id) {
   ['home', 'project', 'info'].forEach(function (v) {
     el(v).hidden = (v !== id);
   });
+
+  // Cover clips sit outside the off-screen watcher, so they are
+  // paused and resumed with their view.
+  ['home-cover', 'project-cover', 'info-cover'].forEach(function (fid) {
+    var vid = el(fid).querySelector('video');
+    if (!vid) return;
+    if (el(fid).closest('.view').hidden) {
+      vid.pause();
+    } else {
+      var p = vid.play();
+      if (p && p.catch) p.catch(function () {});
+    }
+  });
 }
 
+// Only project titles carry an active state. The name, info and
+// contact stay semibold on every page.
 function markActive(slug) {
-  var links = document.querySelectorAll('#sidebar a');
+  var links = document.querySelectorAll('#project-index a');
   Array.prototype.forEach.call(links, function (a) {
-    a.classList.toggle('active', a.dataset.slug === slug || a.dataset.nav === slug);
+    a.classList.toggle('active', a.dataset.slug === slug);
   });
 }
 
 function route() {
-  document.body.classList.remove('is-focus');
-
-  var meta = el('hover-meta');
-  if (meta) meta.hidden = true;
+  document.body.classList.remove('is-focus', 'is-previewing');
+  el('hover-meta').hidden = true;
+  clearInfoCover();
 
   var hash = decodeURIComponent(window.location.hash.replace('#', ''));
 
-  if (window.innerWidth <= 800) closeMenu();
+  if (isMobile()) closeMenu();
 
   if (!hash) {
+    openSlug = '';
     show('home');
-    markActive('home');
+    markActive('');
+    // Nothing to protect on home, so hover works straight away.
+    hoverArmed = true;
     document.title = 'Géraldine Recker';
     return;
   }
 
   if (hash === 'info') {
+    openSlug = '';
     show('info');
-    markActive('info');
+    markActive('');
+    resetScroll('#info');
     document.title = 'Géraldine Recker — Info';
     return;
   }
 
-  var p = projects.filter(function (x) { return x.slug === hash; })[0];
+  var p = findProject(hash);
   if (p) {
     renderProject(p);
     show('project');
-    markActive(hash);
-    resetMediaScroll();
+    markActive(p.slug);
+    resetScroll('#project');
   } else {
+    openSlug = '';
     show('home');
-    markActive('home');
+    markActive('');
   }
+}
+
+// A newly opened page starts at its top: media at the lead image,
+// text at its first line.
+function resetScroll(viewSel) {
+  ['.col-content', '.col-text'].forEach(function (c) {
+    var node = document.querySelector(viewSel + ' ' + c);
+    if (node) node.scrollTop = 0;
+  });
+  if (isMobile()) window.scrollTo(0, 0);
 }
 
 /* ---------- mobile menu ---------- */
@@ -592,22 +827,40 @@ function toggleMenu() {
 
 el('menu-toggle').addEventListener('click', toggleMenu);
 window.addEventListener('hashchange', route);
+window.addEventListener('popstate', route);
+
 window.addEventListener('resize', function () {
-  var meta = el('hover-meta');
-  if (meta && !meta.hidden) meta.hidden = true;
+  el('hover-meta').hidden = true;
+  alignText();
 });
 
-// Landing is a desktop idea: it rewards a cursor and a first click.
-// On a phone the list is simply there, and the first tap on an
-// image should clear the screen rather than be spent ending the
-// landing. A direct project link skips it everywhere.
-var isTouch = window.matchMedia('(max-width: 800px)').matches ||
-              !window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+// The nav's height changes when the webfonts land and whenever the
+// list changes; keep the text column measured against it.
+if (window.ResizeObserver) {
+  new ResizeObserver(alignText).observe(el('sidebar'));
+}
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(alignText);
+}
 
-if (window.location.hash || isTouch) {
+// Landing — desktop only: name and cycling photo until the first
+// click. A direct project link skips it.
+function endLanding() {
+  if (landingOver) return;
   landingOver = true;
+  clearInterval(coverTimer);
+  coverTimer = null;
+  document.documentElement.classList.remove('is-landing');
+  document.removeEventListener('click', endLanding);
+}
+
+// The class itself is set by the small script in <head>, before the
+// first paint. This only keeps the two in step.
+if (window.location.hash || isMobile() || !FINE_POINTER) {
+  landingOver = true;
+  document.documentElement.classList.remove('is-landing');
 } else {
-  document.body.classList.add('is-landing');
+  document.documentElement.classList.add('is-landing');
   document.addEventListener('click', endLanding);
 }
 
@@ -617,30 +870,15 @@ document.querySelectorAll('[data-nav]').forEach(function (a) {
     var target = (a.dataset.nav === 'home') ? '' : a.dataset.nav;
     if (('#' + target) === window.location.hash || (!target && !window.location.hash)) {
       route();
+    } else if (!target) {
+      // Clear the hash without leaving a bare "#" in the address.
+      history.pushState('', document.title, window.location.pathname + window.location.search);
+      route();
     } else {
       window.location.hash = target;
     }
   });
 });
-
-/* Two sheets load in parallel; the page is marked ready once both
-   have settled, succeeded or failed. */
-
-var pending = 2;
-
-function settled() {
-  pending -= 1;
-  if (pending <= 0) markReady();
-}
-
-// Last resort: never leave a blank page if something hangs.
-setTimeout(function () {
-  if (pending > 0) {
-    console.warn('Load timed out — showing page anyway.');
-    pending = 0;
-    markReady();
-  }
-}, 6000);
 
 /* --- projects --- */
 
@@ -684,24 +922,22 @@ Papa.parse(CSV_URL + '&t=' + Date.now(), {
     if (!projects.length) {
       fail('No projects recognised. Headers found: ' +
            (res.meta.fields || []).join(', '));
-      settled();
       return;
     }
 
     renderIndex();
+    alignText();
     wireHover();
     wireFocus();
     wireCursor();
     wireScrollbar();
     renderHome();
     route();
-    settled();
   },
 
   error: function (err) {
     console.error('Projects sheet failed:', err);
     fail('The project list didn’t load. Check the sheet is still published to the web.');
-    settled();
   }
 });
 
@@ -715,11 +951,9 @@ Papa.parse(INFO_CSV_URL + '&t=' + Date.now(), {
   complete: function (res) {
     console.log('Info — headers:', res.meta.fields, '· rows:', res.data.length);
     renderInfo(res.data.map(norm));
-    settled();
   },
 
   error: function (err) {
-    console.error('Info sheet failed:', err);
-    settled();   // info is optional — the site works without it
+    console.error('Info sheet failed:', err);   // the site works without it
   }
 });
