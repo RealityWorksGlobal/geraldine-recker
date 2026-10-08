@@ -56,10 +56,10 @@
   font-display: swap;
 }
 
-/* Name, info, contact, hover. Needs fonts/SuisseIntl-SemiBold.woff2. */
+/* Name, info, contact, hover. Needs fonts/SuisseIntl-Semibold.woff2. */
 @font-face {
   font-family: "Suisse Intl";
-  src: url("fonts/SuisseIntl-SemiBold.woff2") format("woff2");
+  src: url("fonts/SuisseIntl-Semibold.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   font-display: swap;
