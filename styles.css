@@ -281,9 +281,15 @@ body.is-previewing #project-media { display: none; }
   max-height: calc(100% - var(--text-top, 0px));
   min-height: 0;
   min-width: 0;
-  overflow-y: auto;
+  overflow-y: hidden;
   overflow-wrap: break-word;
 }
+
+/* Scrollable only when the text really is longer than its space —
+   JS decides and adds the class. By default the box can't be
+   scrolled at all, so a short text can't be nudged by a pixel or two
+   of rounding, whatever the browser or font. */
+.col-text.is-scrolling { overflow-y: auto; }
 
 /* Year / type / medium, stacked above the description. */
 #project-meta { margin-bottom: 1em; }
@@ -388,11 +394,9 @@ body.has-cursor #cursor { display: flex; }
 .col-content::-webkit-scrollbar,
 .col-text::-webkit-scrollbar { width: 0; height: 0; }
 
-#scrollbar {
+/* Shared look for both indicators: a dot on a faint hairline. */
+.scroll-indicator {
   position: fixed;
-  top: var(--gap);
-  bottom: var(--gap);
-  right: calc(var(--gap) / 2 - var(--dot) / 2);
   width: var(--dot);
   z-index: 150;
   pointer-events: none;
@@ -400,10 +404,25 @@ body.has-cursor #cursor { display: flex; }
   transition: opacity 300ms ease;
 }
 
-#scrollbar.is-live { opacity: 1; }
-body.is-focus #scrollbar { opacity: 0; }
+.scroll-indicator.is-live { opacity: 1; }
+body.is-focus .scroll-indicator { opacity: 0; }
 
-#scrollbar::before {
+/* Images: the right edge of the window, full height. */
+#scrollbar {
+  top: var(--gap);
+  bottom: var(--gap);
+  right: calc(var(--gap) / 2 - var(--dot) / 2);
+}
+
+/* Description: centred in the margin to the left of the text. JS
+   sets its top and height to match the text box exactly. */
+#text-scrollbar {
+  left: calc(var(--gap) / 2 - var(--dot) / 2);
+  top: 0;
+  height: 0;
+}
+
+.scroll-indicator::before {
   content: '';
   position: absolute;
   top: 0; bottom: 0;
@@ -540,8 +559,11 @@ body.is-focus .col-text {
     max-height: none;
   }
 
+  /* The page scrolls as one on a phone: the right-hand indicator
+     tracks it; the text one has nothing of its own to track. */
   #hover-meta,
-  #cursor { display: none !important; }
+  #cursor,
+  #text-scrollbar { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -552,5 +574,5 @@ body.is-focus .col-text {
   .col-text,
   #cursor,
   .cursor-label,
-  #scrollbar { transition: none; }
+  .scroll-indicator { transition: none; }
 }

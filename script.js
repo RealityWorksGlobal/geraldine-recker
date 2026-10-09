@@ -450,10 +450,18 @@ function fitText() {
 
   Array.prototype.forEach.call(document.querySelectorAll('.view:not([hidden]) .col-text'), function (c) {
     c.style.maxHeight = '';                          // back to the CSS cap
+    c.classList.remove('is-scrolling');
     var over = c.scrollHeight - c.clientHeight;
-    if (over > 0 && over <= gap) {
+
+    if (over > gap) {
+      // Really too long: scroll, keeping the gap under the list.
+      c.classList.add('is-scrolling');
+    } else if (over > 0) {
+      // Nearly fits: borrow the gap instead. Any sub-pixel remainder
+      // is clipped, and the box can't be scrolled.
       c.style.maxHeight = 'calc(100% - ' + navH + 'px)';
     }
+    c.scrollTop = 0;
   });
 }
 
@@ -706,59 +714,72 @@ function wireCursor() {
 
 /* ---------- scroll indicator ---------- */
 
-// A dot on a hairline at the right edge. Indicator only. It follows
-// whichever column you're scrolling — the images or a long
-// description — and falls back to the images. On a phone, the page.
-function wireScrollbar() {
-  var bar = el('scrollbar');
-  if (!bar) return;
-  var dot = bar.querySelector('.scroll-dot');
-  if (!dot) return;
+// Two indicators, same design, each tracking its own column:
+//  - right edge of the window: the images (on a phone, the page);
+//  - left of the description: the text, only when it really scrolls.
+// Indicators only — neither is draggable.
+function wireScrollbars() {
+  var media = makeIndicator(el('scrollbar'));
+  var text = makeIndicator(el('text-scrollbar'));
+  if (!media && !text) return;
 
-  var lastY = -1;
-  var lastLive = null;
-  var current = null;      // the column last scrolled or pointed at
-
-  function scrollable(node) {
-    return !!node && node.scrollHeight - node.clientHeight > 1;
+  function visible(sel) {
+    var view = document.querySelector('.view:not([hidden])');
+    return view ? view.querySelector(sel) : null;
   }
 
-  function claim(e) {
-    var node = e.target && e.target.closest && e.target.closest('.col-content, .col-text');
-    if (node && scrollable(node)) current = node;
-  }
-
-  // Scroll events don't bubble, so listen in the capture phase.
-  document.addEventListener('scroll', claim, true);
-  document.addEventListener('mouseover', claim);
-
-  function activeColumn() {
+  function mediaColumn() {
     if (isMobile()) {
       var doc = document.scrollingElement || document.documentElement;
-      return scrollable(doc) ? doc : null;
+      return (doc.scrollHeight - doc.clientHeight > 1) ? doc : null;
     }
-    var view = document.querySelector('.view:not([hidden])');
-    if (!view) return null;
-    if (current && view.contains(current) && scrollable(current)) return current;
-    var media = view.querySelector('.col-content');
-    if (scrollable(media)) return media;
-    var text = view.querySelector('.col-text');
-    return scrollable(text) ? text : null;
+    var col = visible('.col-content');
+    return (col && col.scrollHeight - col.clientHeight > 1) ? col : null;
   }
 
-  // Polled rather than event-driven: lazy images change the column's
-  // height as they arrive, and no scroll event reports that. Writes
-  // only happen when something actually moved.
+  function textColumn() {
+    if (isMobile()) return null;
+    var col = visible('.col-text');
+    return (col && col.classList.contains('is-scrolling')) ? col : null;
+  }
+
+  // Polled: lazy images change a column's height as they arrive, and
+  // no scroll event reports that. Writes only when something moved.
   function update() {
-    var col = activeColumn();
-    var live = !!col;
+    if (media) media.track(mediaColumn(), false);
+    if (text) text.track(textColumn(), true);
+    requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
 
-    if (live !== lastLive) {
-      bar.classList.toggle('is-live', live);
-      lastLive = live;
-    }
+// One indicator. `fit` lays the track along the column's own height.
+function makeIndicator(bar) {
+  if (!bar) return null;
+  var dot = bar.querySelector('.scroll-dot');
+  if (!dot) return null;
 
-    if (live) {
+  var lastLive = null, lastY = -1, lastTop = -1, lastH = -1;
+
+  return {
+    track: function (col, fit) {
+      var live = !!col;
+      if (live !== lastLive) {
+        bar.classList.toggle('is-live', live);
+        lastLive = live;
+      }
+      if (!live) return;
+
+      if (fit) {
+        var r = col.getBoundingClientRect();
+        var top = Math.round(r.top), h = Math.round(r.height);
+        if (top !== lastTop || h !== lastH) {
+          bar.style.top = top + 'px';
+          bar.style.height = h + 'px';
+          lastTop = top; lastH = h;
+        }
+      }
+
       var max = col.scrollHeight - col.clientHeight;
       var y = Math.round((max > 0 ? col.scrollTop / max : 0) * (bar.clientHeight - dot.offsetHeight));
       if (y !== lastY) {
@@ -766,11 +787,7 @@ function wireScrollbar() {
         lastY = y;
       }
     }
-
-    requestAnimationFrame(update);
-  }
-
-  requestAnimationFrame(update);
+  };
 }
 
 /* ---------- videos ---------- */
@@ -1002,7 +1019,7 @@ Papa.parse(CSV_URL + '&t=' + Date.now(), {
     wireHover();
     wireFocus();
     wireCursor();
-    wireScrollbar();
+    wireScrollbars();
     renderHome();
     route();
   },
