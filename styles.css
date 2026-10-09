@@ -266,30 +266,23 @@ body.is-previewing #project-media { display: none; }
 /* ---------- 7. text ---------- */
 
 /* Description on the bottom margin, columns 1–2 — the same cell the
-   nav occupies. --text-top is the nav's measured height, so a long
-   description scrolls in the space below the list instead of
-   climbing over it. */
+   nav occupies.
+
+   The box is exactly as tall as its text and sits on the bottom
+   line, so text that fits never scrolls — not even by a pixel. It
+   can never grow taller than the space under the nav (--text-top is
+   the nav's measured height), so a long description scrolls inside
+   a box that starts below the list. Nothing in the box can travel
+   up into the titles, because the box itself never reaches them. */
 .col-text {
   grid-column: var(--col-text);
   grid-row: 1;
-  height: 100%;
+  align-self: end;
+  max-height: calc(100% - var(--text-top, 0px));
   min-height: 0;
   min-width: 0;
-  padding-top: var(--text-top, 0px);
   overflow-y: auto;
   overflow-wrap: break-word;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Pushes the content down to the bottom margin. A pseudo-element,
-   because the first real child can be the screen-reader heading,
-   which is out of the flow. An auto margin rather than flex-end,
-   which would clip the top of an overlong text. */
-.col-text::before {
-  content: '';
-  margin-top: auto;
-  flex: 0 0 auto;
 }
 
 /* Year / type / medium, stacked above the description. */
@@ -527,14 +520,11 @@ body.is-focus .col-text {
   /* The desktop text column is pinned to the bottom and padded for
      the nav. On a phone it is just text, in the flow. */
   .col-text {
-    display: block;
-    height: auto;
-    padding-top: 0;
+    align-self: auto;
+    max-height: none;
     overflow: visible;
     margin: 0 0 var(--gap);
   }
-
-  .col-text::before { display: none; }
 
   .col-content {
     height: auto;

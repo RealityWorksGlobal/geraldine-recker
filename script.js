@@ -418,9 +418,9 @@ function renderInfo(rows) {
   alignText();
 }
 
-/* The description shares columns 1–2 with the nav. This reserves
-   the nav's real height at the top of that column, so a long text
-   scrolls in the space below the list rather than overlapping it.
+/* The description shares columns 1–2 with the nav. This measures
+   the nav's real height, and the CSS caps the text box to the space
+   below it — so a long text scrolls under the list, never over it.
    Measured, so it follows the list's length, --gap and the font. */
 function alignText() {
   if (isMobile()) {
@@ -432,6 +432,29 @@ function alignText() {
   var gap = parseFloat(getComputedStyle(document.body).rowGap) || 0;
   var h = nav.getBoundingClientRect().height;
   document.documentElement.style.setProperty('--text-top', (h + gap) + 'px');
+  fitText();
+}
+
+/* A description a few pixels too tall for its space would scroll by
+   those few pixels — a "mini scroll" that reads as a glitch. When the
+   overflow is no more than the gap between nav and text, the box
+   borrows that gap instead: it rises to sit right under the list,
+   still clear of it, and doesn't scroll at all. Anything taller is a
+   real scroll and keeps the gap. */
+function fitText() {
+  if (isMobile()) return;
+  var nav = el('sidebar');
+  if (!nav) return;
+  var gap = parseFloat(getComputedStyle(document.body).rowGap) || 0;
+  var navH = nav.getBoundingClientRect().height;
+
+  Array.prototype.forEach.call(document.querySelectorAll('.view:not([hidden]) .col-text'), function (c) {
+    c.style.maxHeight = '';                          // back to the CSS cap
+    var over = c.scrollHeight - c.clientHeight;
+    if (over > 0 && over <= gap) {
+      c.style.maxHeight = 'calc(100% - ' + navH + 'px)';
+    }
+  });
 }
 
 /* ---------- hover ---------- */
@@ -683,8 +706,9 @@ function wireCursor() {
 
 /* ---------- scroll indicator ---------- */
 
-// A dot on a hairline at the right edge. Indicator only. On desktop
-// it follows the media column; on a phone, the page.
+// A dot on a hairline at the right edge. Indicator only. It follows
+// whichever column you're scrolling — the images or a long
+// description — and falls back to the images. On a phone, the page.
 function wireScrollbar() {
   var bar = el('scrollbar');
   if (!bar) return;
@@ -693,16 +717,33 @@ function wireScrollbar() {
 
   var lastY = -1;
   var lastLive = null;
+  var current = null;      // the column last scrolled or pointed at
+
+  function scrollable(node) {
+    return !!node && node.scrollHeight - node.clientHeight > 1;
+  }
+
+  function claim(e) {
+    var node = e.target && e.target.closest && e.target.closest('.col-content, .col-text');
+    if (node && scrollable(node)) current = node;
+  }
+
+  // Scroll events don't bubble, so listen in the capture phase.
+  document.addEventListener('scroll', claim, true);
+  document.addEventListener('mouseover', claim);
 
   function activeColumn() {
-    if (!isMobile()) {
-      var view = document.querySelector('.view:not([hidden])');
-      var col = view && view.querySelector('.col-content');
-      if (col && col.scrollHeight - col.clientHeight > 4) return col;
-      return null;
+    if (isMobile()) {
+      var doc = document.scrollingElement || document.documentElement;
+      return scrollable(doc) ? doc : null;
     }
-    var doc = document.scrollingElement || document.documentElement;
-    return (doc.scrollHeight - doc.clientHeight > 4) ? doc : null;
+    var view = document.querySelector('.view:not([hidden])');
+    if (!view) return null;
+    if (current && view.contains(current) && scrollable(current)) return current;
+    var media = view.querySelector('.col-content');
+    if (scrollable(media)) return media;
+    var text = view.querySelector('.col-text');
+    return scrollable(text) ? text : null;
   }
 
   // Polled rather than event-driven: lazy images change the column's
@@ -832,6 +873,7 @@ function route() {
 // A newly opened page starts at its top: media at the lead image,
 // text at its first line.
 function resetScroll(viewSel) {
+  fitText();
   ['.col-content', '.col-text'].forEach(function (c) {
     var node = document.querySelector(viewSel + ' ' + c);
     if (node) node.scrollTop = 0;
