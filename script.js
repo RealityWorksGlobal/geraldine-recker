@@ -96,9 +96,10 @@ function isVideo(name) {
   return /\.(mp4|mov|webm|m4v)(\?|$)/i.test(String(name).trim());
 }
 
-// Year, type, medium.
+// Type, medium, year — the order of Géraldine's layout. Used both
+// for the hover line and the stack above the description.
 function metaBits(p) {
-  return [p.year, p.type, p.medium].filter(Boolean);
+  return [p.type, p.medium, p.year].filter(Boolean);
 }
 
 function findProject(slug) {
@@ -313,7 +314,7 @@ function renderProject(p) {
 
   el('project-title').textContent = p.title;
 
-  // Year / type / medium, one line each, above the description.
+  // Type / medium / year, one line each, above the description.
   var meta = el('project-meta');
   meta.innerHTML = '';
   metaBits(p).forEach(function (b) {
@@ -514,36 +515,65 @@ function showMeta(p, link) {
     s.textContent = b;
     meta.appendChild(s);
   });
+  meta.hidden = false;      // visible first, so the words can be measured
   placeMeta(link);
-  meta.hidden = false;
 }
 
-/* Level with the hovered title, from --meta-col across --meta-span
-   columns. Measured off the live grid. */
+/* Level with the hovered title. The box runs from just past the end
+   of the title to the right edge of the description column, and the
+   three words are packed against that right edge — so the hover line
+   and the text below finish on the same vertical.
+
+   On a narrow screen the room between title and edge can be smaller
+   than the three words at full spacing. Then the spacing tightens to
+   fit; and if even the tightest spacing won't fit, the line runs on
+   past the text edge rather than back over the title. */
 function placeMeta(link) {
   var meta = el('hover-meta');
-  var view = document.querySelector('.view:not([hidden])');
-  if (!view) return;
+  var col = document.querySelector('.view:not([hidden]) .col-text');
+  if (!col) return;
 
-  var style = getComputedStyle(view);
-  var tracks = style.gridTemplateColumns.split(' ').map(parseFloat);
-  var gap = parseFloat(style.columnGap) || 0;
-  var box = view.getBoundingClientRect();
-
+  var title = link.querySelector('span') || link;
   var root = getComputedStyle(document.documentElement);
-  var col = parseInt(root.getPropertyValue('--meta-col'), 10) || 2;
-  var span = parseInt(root.getPropertyValue('--meta-span'), 10) || 2;
+  var fs = parseFloat(getComputedStyle(meta).fontSize) || 14;
 
-  var left = box.left;
-  for (var i = 0; i < col - 1 && i < tracks.length; i++) left += tracks[i] + gap;
-
-  var width = 0;
-  for (var j = col - 1; j < col - 1 + span && j < tracks.length; j++) width += tracks[j] + gap;
-  width -= gap;
+  var right = col.getBoundingClientRect().right;
+  var left = title.getBoundingClientRect().right + fs;   // 1em clear of the title
+  var room = Math.max(0, right - left);
 
   meta.style.top = link.getBoundingClientRect().top + 'px';
   meta.style.left = left + 'px';
-  meta.style.width = width + 'px';
+  meta.style.width = room + 'px';
+
+  var spans = meta.querySelectorAll('span');
+  var words = 0;
+  Array.prototype.forEach.call(spans, function (sp) {
+    words += sp.getBoundingClientRect().width;
+  });
+  var joins = Math.max(1, spans.length - 1);
+
+  var full = toPx(root.getPropertyValue('--meta-gap'), fs, 4 * fs);
+  var tight = toPx(root.getPropertyValue('--meta-gap-min'), fs, 0.75 * fs);
+  var fits = (room - words) / joins;
+
+  if (fits >= full) {
+    meta.style.gap = full + 'px';
+    meta.style.justifyContent = 'flex-end';
+  } else if (fits >= tight) {
+    meta.style.gap = fits + 'px';               // tightened, still on the edge
+    meta.style.justifyContent = 'flex-end';
+  } else {
+    meta.style.gap = tight + 'px';              // runs past the edge instead
+    meta.style.justifyContent = 'flex-start';
+  }
+}
+
+// "4em" or "56px" -> pixels.
+function toPx(value, fs, fallback) {
+  var v = String(value || '').trim();
+  var n = parseFloat(v);
+  if (isNaN(n)) return fallback;
+  return v.indexOf('em') > -1 ? n * fs : n;
 }
 
 var previewScroll = 0;
