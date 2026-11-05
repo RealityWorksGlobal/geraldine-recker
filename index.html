@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Géraldine Recker</title>
+<!-- Favicon: the flamingo emoji, drawn by the visitor's own system
+     (Apple's flamingo on iPhone/Mac, Google's on Android, etc.). -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦩</text></svg>">
 
 <meta name="description" content="Architecture and projects.">
 <meta property="og:title" content="Géraldine Recker">
@@ -39,7 +42,7 @@
   <ul id="project-index"></ul>
   <ul class="meta">
     <li><a href="#" data-nav="info">info</a></li>
-    <li><a href="mailto:REPLACE@EMAIL.COM">contact</a></li>
+    <li><a href="#" data-nav="contact">contact</a></li>
   </ul>
 </nav>
 
@@ -57,7 +60,7 @@
   <section id="project" class="view" hidden>
 
     <div class="col-text">
-      <h1 id="project-title" class="sr-only"></h1>
+      <h1 id="project-title" class="sr-only project-line"></h1>
       <div id="project-text"></div>
     </div>
 
@@ -76,6 +79,7 @@
   <section id="info" class="view" hidden>
     <div class="col-text">
       <div id="info-content"></div>
+      <div id="contact-content" hidden></div>
       <p class="colophon">site by <a href="mailto:studio@juliettemartin.org">juliette martin</a></p>
     </div>
     <div class="col-content">
@@ -91,16 +95,6 @@
   </div>
 
 </main>
-
-<!-- Two scroll indicators, same design: the images on the right
-     edge, the description in the margin to its left. -->
-<div id="scrollbar" class="scroll-indicator" aria-hidden="true">
-  <span class="scroll-dot"></span>
-</div>
-
-<div id="text-scrollbar" class="scroll-indicator" aria-hidden="true">
-  <span class="scroll-dot"></span>
-</div>
 
 <div id="cursor" aria-hidden="true">
   <span class="cursor-label"></span>

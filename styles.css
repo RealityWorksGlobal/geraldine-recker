@@ -49,17 +49,17 @@
   --info-block-gap: 1em;    /* between blocks on the info page (bio, cv…) */
 
   /* phone */
-  --margin-mobile: 30px;    /* outer edge, and space between sections */
+  --margin-mobile: 16px;    /* outer edge of the page */
   --image-gap-mobile: 30px; /* between stacked images */
+  --menu-gap-mobile: 14px;  /* below the name bar: to the list, and to the page */
 
   /* cursor */
   --cursor-size: 10px;      /* the dot that follows the mouse */
   --cursor-link-scale: 1.6; /* how much it grows over something clickable */
   --cursor-lag: 0;          /* 0 = sticks to the mouse; 0.8 = trails behind */
-  --cursor-opacity: 0.5;
+  --cursor-opacity: 1;
 
   /* scroll indicators */
-  --dot: 7px;               /* the dots on the two scroll lines */
 }
 
 /* ---------- 2. font ---------- */
@@ -222,12 +222,15 @@ body {
    A line never wraps, so nothing below it can jump when it grows or
    turns bold. A long one simply runs on into the empty column beside
    the list. */
+/* Only the words react to the mouse, not the empty width of the
+   column beside them. */
 #project-index a {
+  display: inline;
   font-weight: 400;
   white-space: nowrap;
 }
 
-#project-index a.active { font-weight: 700; }
+#project-index a.active { font-weight: 600; }
 
 #project-index .line-meta { display: none; }
 
@@ -354,16 +357,12 @@ body.is-previewing #project-media { display: none; }
 .col-text a.text-link { font-weight: var(--link-weight); }
 .col-text em { font-style: italic; }
 
-#info-content { margin-bottom: var(--info-block-gap); }
-.info-block { margin-bottom: var(--info-block-gap); }
-.info-block h2 {
-  font-size: inherit;
-  font-weight: 600;
-  margin: 0;
-}
+/* Info and contact: blocks stacked, same text, one gap between. */
+.info-block { margin: 0 0 var(--info-block-gap); }
 .info-block p { margin: 0; }
 
 .colophon { margin: 0; }
+.colophon a { font-weight: var(--link-weight); }   /* clickable = 600, like every link */
 
 #error {
   grid-column: var(--col-text);
@@ -426,65 +425,21 @@ body.has-cursor #cursor { display: flex; }
   transform: translateX(0);
 }
 
-/* ---------- 9. scroll indicator ---------- */
+/* ---------- 9. scrollbars ---------- */
 
-/* Native bars off, so no column ever changes width. */
-.col-content,
-.col-text {
+/* No scrollbars anywhere — page, columns, phone menu. Everything
+   still scrolls; nothing shows it. */
+html,
+body,
+* {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.col-content::-webkit-scrollbar,
-.col-text::-webkit-scrollbar { width: 0; height: 0; }
-
-/* Shared look for both indicators: a dot on a faint hairline. */
-.scroll-indicator {
-  position: fixed;
-  width: var(--dot);
-  z-index: 150;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 300ms ease;
-}
-
-.scroll-indicator.is-live { opacity: 1; }
-body.is-focus .scroll-indicator { opacity: 0; }
-
-/* Images: the right edge of the window, full height. */
-#scrollbar {
-  top: var(--margin);
-  bottom: var(--margin);
-  right: calc(var(--margin) / 2 - var(--dot) / 2);
-}
-
-/* Description: centred in the margin to the left of the text. JS
-   sets its top and height to match the text box exactly. */
-#text-scrollbar {
-  left: calc(var(--margin) / 2 - var(--dot) / 2);
-  top: 0;
+::-webkit-scrollbar {
+  display: none;
+  width: 0;
   height: 0;
-}
-
-.scroll-indicator::before {
-  content: '';
-  position: absolute;
-  top: 0; bottom: 0;
-  left: 50%;
-  width: 1px;
-  margin-left: -0.5px;
-  background: var(--ink);
-  opacity: 0.18;
-}
-
-.scroll-dot {
-  position: absolute;
-  top: 0; left: 0;
-  width: var(--dot);
-  height: var(--dot);
-  border-radius: 50%;
-  background: var(--ink);
-  will-change: transform;
 }
 
 /* ---------- 10. states ---------- */
@@ -539,7 +494,8 @@ body.is-focus .col-text {
     z-index: 40;
     align-items: baseline;
     justify-content: space-between;
-    padding: var(--margin);
+    padding: var(--margin) var(--margin) var(--menu-gap-mobile);
+    line-height: var(--lh-nav);
     background: var(--bg);
   }
 
@@ -552,7 +508,7 @@ body.is-focus .col-text {
     z-index: 30;
     max-height: 100vh;
     overflow-y: auto;
-    padding: calc(var(--margin) * 2.4) var(--margin) var(--margin);
+    padding: calc(var(--margin) + var(--lh-nav) * 1em + var(--menu-gap-mobile)) var(--margin) var(--margin);
     background: var(--bg);
     transform: translateY(-101%);
     transition: transform 240ms ease;
@@ -574,7 +530,7 @@ body.is-focus .col-text {
 
   #main {
     height: auto;
-    padding-top: calc(var(--margin) * 1.6);
+    padding-top: calc(var(--lh-nav) * 1em + var(--menu-gap-mobile));
   }
 
   .view {
@@ -606,14 +562,26 @@ body.is-focus .col-text {
     max-height: none;
   }
 
-  /* The page scrolls as one on a phone: the right-hand indicator
-     tracks it; the text one has nothing of its own to track. */
-  #cursor,
-  #text-scrollbar { display: none !important; }
+  /* No custom cursor on a phone. */
+  #cursor { display: none !important; }
+
+  /* The project's title line sits above its text, like the open line
+     in the desktop index. Undoes .sr-only. */
+  .project-line {
+    position: static;
+    width: auto; height: auto;
+    margin: 0 0 var(--info-block-gap);
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    font-size: inherit;
+    font-weight: 600;
+    line-height: inherit;
+  }
 
   /* In the drop-down a long line may wrap — there's no column beside
      it to run into. */
-  #project-index a { white-space: normal; }
+  #project-index a { display: block; white-space: normal; }  /* full-width tap target */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -624,6 +592,5 @@ body.is-focus .col-text {
   .col-text,
   #cursor,
   #cursor::before,
-  .cursor-label,
-  .scroll-indicator { transition: none; }
+  .cursor-label { transition: none; }
 }

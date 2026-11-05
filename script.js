@@ -17,6 +17,12 @@
 var CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGHShozHpH9zqXji89-kkpWgNqBSE0-5qX_duOtUYPBBpIHzHEmXbUT5Tw1qXdmA8yxQvS0tjAlqUI/pub?gid=0&single=true&output=csv';
 var INFO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGHShozHpH9zqXji89-kkpWgNqBSE0-5qX_duOtUYPBBpIHzHEmXbUT5Tw1qXdmA8yxQvS0tjAlqUI/pub?gid=1054162112&single=true&output=csv';
 var IMAGE_BASE = 'https://cdn.juliettemartin.org/website_geraldine-recker_portfolio/';
+var CONTACT_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGHShozHpH9zqXji89-kkpWgNqBSE0-5qX_duOtUYPBBpIHzHEmXbUT5Tw1qXdmA8yxQvS0tjAlqUI/pub?gid=1232583974&single=true&output=csv';
+
+// The CV link at the bottom of the info page. Put the PDF in the same
+// NAS folder as the images and write its file name here.
+// Leave empty ('') to hide the link.
+var CV_FILE = 'cv.pdf';
 
 var FIELDS = {
   title:       ['projecttitle'],
@@ -141,10 +147,15 @@ function findProject(slug) {
 function paragraphs(into, text) {
   into.innerHTML = '';
   if (!text) return;
-  text.split(/\\n|\n/).forEach(function (para) {
-    if (!para.trim()) return;
+  // One return = new line. Each extra return = one empty line, as
+  // typed. Empty lines at the very start and end are dropped.
+  var lines = text.split(/\\n|\n/).map(function (l) { return l.trim(); });
+  while (lines.length && !lines[0]) lines.shift();
+  while (lines.length && !lines[lines.length - 1]) lines.pop();
+  lines.forEach(function (para) {
     var node = document.createElement('p');
-    node.innerHTML = inlineMarkup(para.trim());
+    if (para) node.innerHTML = inlineMarkup(para);
+    else { node.className = 'blank'; node.innerHTML = '&nbsp;'; }
     into.appendChild(node);
   });
 }
@@ -372,18 +383,19 @@ function renderHome() {
 function renderProject(p) {
   openSlug = p.slug;
 
-  el('project-title').textContent = p.title;
+  // Title line, as in the index: "title, type, medium, year". Read by
+  // screen readers everywhere; shown above the text on a phone only.
+  var bits = metaBits(p);
+  el('project-title').textContent = p.title + (bits.length ? ', ' + bits.join(', ') : '');
 
   paragraphs(el('project-text'), p.description);
 
-  // The lead image. If the photo on screen belongs to this project
-  // it carries straight through; otherwise the project's own cover.
-  // A photo from another project can never lead.
-  var own = p.covers.concat(p.images);
-  openLead = (currentCover && own.indexOf(currentCover) > -1) ? currentCover : firstStill(p.covers);
-
-  // Clear first, so the previous project's lead is never on screen
-  // for even a moment while the new one loads.
+  // A project shows its content exactly in the order of the sheet,
+  // starting at the first item. The cover photo is only for the home
+  // page and hover previews; it appears in the project only where it
+  // is listed in the content. The lead slot is kept empty here and
+  // used only while a hover preview is showing.
+  openLead = '';
   var leadFrame = el('project-cover');
   clearMedia(leadFrame);
   swapMedia(leadFrame, openLead);
@@ -392,9 +404,6 @@ function renderProject(p) {
   box.innerHTML = '';
 
   p.images.forEach(function (name, i) {
-    // The lead image is already at the top: don't show it twice.
-    if (name === openLead) return;
-
     var fig = document.createElement('figure');
     fig.className = 'frame';
 
@@ -503,32 +512,51 @@ function renderInfo(rows) {
   if (!box) return;
   box.innerHTML = '';
 
-  rows
-    .filter(function (r) { return r.title || r.content; })
-    .sort(function (a, b) {
-      var na = parseFloat(a.number);
-      var nb = parseFloat(b.number);
-      if (isNaN(na)) return 1;
-      if (isNaN(nb)) return -1;
-      return na - nb;
-    })
-    .forEach(function (r) {
-      var block = document.createElement('section');
-      block.className = 'info-block';
+  // The bio: the 'content' column, every filled row, top to bottom.
+  rows.forEach(function (r) {
+    if (!r.content) return;
+    var block = document.createElement('div');
+    block.className = 'info-block';
+    paragraphs(block, r.content);
+    box.appendChild(block);
+  });
 
-      if (r.title) {
-        var h = document.createElement('h2');
-        h.textContent = r.title;
-        block.appendChild(h);
-      }
-      if (r.content) {
-        var body = document.createElement('div');
-        paragraphs(body, r.content);
-        block.appendChild(body);
-      }
-      box.appendChild(block);
-    });
+  // The CV link, last. Opens the PDF (a browser saves it from there).
+  if (CV_FILE) {
+    var cv = document.createElement('p');
+    cv.className = 'info-block cv';
+    var a = document.createElement('a');
+    a.className = 'text-link';
+    a.href = IMAGE_BASE + encodeURI(CV_FILE);
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.setAttribute('download', '');
+    a.textContent = 'cv';
+    cv.appendChild(a);
+    box.appendChild(cv);
+  }
 
+  alignText();
+}
+
+/* Contact: the first filled row of the contact tab. Each column is
+   one block, in the sheet's column order (name, adress, email,
+   insta…), stacked like the bio, no headings. A new column in the
+   sheet shows up by itself. */
+function renderContact(fields, rows) {
+  var box = el('contact-content');
+  if (!box) return;
+  box.innerHTML = '';
+  var row = rows[0];
+  if (!row) return;
+  fields.forEach(function (f) {
+    var text = row[f];
+    if (!text || !String(text).trim()) return;
+    var block = document.createElement('div');
+    block.className = 'info-block';
+    paragraphs(block, text);
+    box.appendChild(block);
+  });
   alignText();
 }
 
@@ -836,84 +864,6 @@ function wireCursor() {
   }
 }
 
-/* ---------- scroll indicator ---------- */
-
-// Two indicators, same design, each tracking its own column:
-//  - right edge of the window: the images (on a phone, the page);
-//  - left of the description: the text, only when it really scrolls.
-// Indicators only — neither is draggable.
-function wireScrollbars() {
-  var media = makeIndicator(el('scrollbar'));
-  var text = makeIndicator(el('text-scrollbar'));
-  if (!media && !text) return;
-
-  function visible(sel) {
-    var view = document.querySelector('.view:not([hidden])');
-    return view ? view.querySelector(sel) : null;
-  }
-
-  function mediaColumn() {
-    if (isMobile()) {
-      var doc = document.scrollingElement || document.documentElement;
-      return (doc.scrollHeight - doc.clientHeight > 1) ? doc : null;
-    }
-    var col = visible('.col-content');
-    return (col && col.scrollHeight - col.clientHeight > 1) ? col : null;
-  }
-
-  function textColumn() {
-    if (isMobile()) return null;
-    var col = visible('.col-text');
-    return (col && col.classList.contains('is-scrolling')) ? col : null;
-  }
-
-  // Polled: lazy images change a column's height as they arrive, and
-  // no scroll event reports that. Writes only when something moved.
-  function update() {
-    if (media) media.track(mediaColumn(), false);
-    if (text) text.track(textColumn(), true);
-    requestAnimationFrame(update);
-  }
-  requestAnimationFrame(update);
-}
-
-// One indicator. `fit` lays the track along the column's own height.
-function makeIndicator(bar) {
-  if (!bar) return null;
-  var dot = bar.querySelector('.scroll-dot');
-  if (!dot) return null;
-
-  var lastLive = null, lastY = -1, lastTop = -1, lastH = -1;
-
-  return {
-    track: function (col, fit) {
-      var live = !!col;
-      if (live !== lastLive) {
-        bar.classList.toggle('is-live', live);
-        lastLive = live;
-      }
-      if (!live) return;
-
-      if (fit) {
-        var r = col.getBoundingClientRect();
-        var top = Math.round(r.top), h = Math.round(r.height);
-        if (top !== lastTop || h !== lastH) {
-          bar.style.top = top + 'px';
-          bar.style.height = h + 'px';
-          lastTop = top; lastH = h;
-        }
-      }
-
-      var max = col.scrollHeight - col.clientHeight;
-      var y = Math.round((max > 0 ? col.scrollTop / max : 0) * (bar.clientHeight - dot.offsetHeight));
-      if (y !== lastY) {
-        dot.style.transform = 'translateY(' + y + 'px)';
-        lastY = y;
-      }
-    }
-  };
-}
-
 /* ---------- videos ---------- */
 
 // Clips play only while on screen. Off-screen ones, and the open
@@ -990,12 +940,17 @@ function route() {
     return;
   }
 
-  if (hash === 'info') {
+  // Info and contact share one page: bio + cv, or the contact tab.
+  if (hash === 'info' || hash === 'contact') {
     openSlug = '';
+    var isContact = hash === 'contact';
+    el('info-content').hidden = isContact;
+    el('contact-content').hidden = !isContact;
     show('info');
     markActive('');
     resetScroll('#info');
-    document.title = 'Géraldine Recker — Info';
+    alignText();
+    document.title = 'Géraldine Recker — ' + (isContact ? 'Contact' : 'Info');
     centerLead();
     return;
   }
@@ -1144,7 +1099,6 @@ Papa.parse(CSV_URL + '&t=' + Date.now(), {
     wireHover();
     wireFocus();
     wireCursor();
-    wireScrollbars();
     renderHome();
     route();
   },
@@ -1169,5 +1123,22 @@ Papa.parse(INFO_CSV_URL + '&t=' + Date.now(), {
 
   error: function (err) {
     console.error('Info sheet failed:', err);   // the site works without it
+  }
+});
+
+/* --- contact --- */
+
+Papa.parse(CONTACT_CSV_URL + '&t=' + Date.now(), {
+  download: true,
+  header: true,
+  skipEmptyLines: true,
+
+  complete: function (res) {
+    console.log('Contact — headers:', res.meta.fields, '· rows:', res.data.length);
+    renderContact(res.meta.fields || [], res.data);
+  },
+
+  error: function (err) {
+    console.error('Contact sheet failed:', err);   // the site works without it
   }
 });
