@@ -360,6 +360,8 @@ body.is-previewing #project-media { display: none; }
 /* Info and contact: blocks stacked, same text, one gap between. */
 .info-block { margin: 0 0 var(--info-block-gap); }
 .info-block p { margin: 0; }
+/* Contact: name and address together, no empty line between */
+#contact-content .info-block:first-child { margin-bottom: 0; }
 
 .colophon { margin: 0; }
 .colophon a { font-weight: var(--link-weight); }   /* clickable = 600, like every link */
