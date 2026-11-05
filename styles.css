@@ -1,40 +1,65 @@
 /* ============================================================
    Géraldine Recker
-   1 tokens · 2 font · 3 base · 4 grid · 5 nav · 6 media
+   1 settings · 2 font · 3 base · 4 grid · 5 nav · 6 media
    7 text · 8 cursor · 9 scroll · 10 states · 11 mobile
 
-   One 8-column grid holds the page. --gap is the only spacing
-   value: outer margin, gutters, and the space between stacked
-   images are all the same number. Everything is black; weight
-   carries all emphasis.
+   One 8-column grid holds the page. Every distance worth tuning is
+   a setting in section 1 — change the number there, never in the
+   rules below. Everything is black; weight carries all emphasis.
    ============================================================ */
 
-/* ---------- 1. tokens ---------- */
+/* ---------- 1. settings ---------- */
 
 :root {
+
+  /* colour */
   --bg: #ffffff;
   --ink: #111111;
+  --select: #ffc9e2;        /* text selection */
 
+  /* page */
   --cols: 8;
-  --gap: 16px;            /* the only spacing value on the page */
+  --margin: 16px;           /* outer edge of the page, all four sides */
+  --gutter: 16px;           /* space between columns */
 
-  --col-nav: 1 / 2;       /* nav */
-  --col-text: 1 / 3;      /* description, on the bottom margin */
-  --col-media: 5 / -1;    /* images */
+  /* which columns each part uses */
+  --col-nav: 1 / 2;         /* project list */
+  --col-text: 1 / 3;        /* description, on the bottom margin */
+  --col-media: 5 / -1;      /* images */
 
-  --meta-gap: 4em;        /* between type, medium and year on hover */
-  --meta-gap-min: 0.75em; /* tightest it may get on a narrow screen */
+  /* images */
+  --image-gap: 33vh;        /* between stacked images — a third of the screen height (test) */
+  --portrait-max: calc(100vh - var(--margin) * 2);   /* tallest a vertical image gets */
+  --caption-gap: 5px;       /* between an image and its caption */
 
-  --select: #ffc9e2;      /* text selection */
-
+  /* type */
   --fs-body: 14px;
   --lh-body: 1.3;
+  --text-case: lowercase;   /* everything in lowercase; "none" keeps the sheet's capitals */
 
-  --lh-nav: 1.35;         /* nav line height — fixed, see section 5 */
-  --nav-gap: 0.15em;      /* extra space between project titles */
+  /* project list */
+  --lh-nav: 1.35;           /* line height — fixed, see section 5 */
+  --nav-gap: 0px;           /* between project titles */
+  --brand-gap: 0px;         /* between the name and the first title */
+  --nav-meta-gap: 0px;      /* between the last title and "info" */
 
-  --dot: 7px;             /* cursor and scroll indicator, same size */
+  /* description */
+  --link-weight: 600;       /* a linked word in the text: semibold */
+  --text-nav-gap: 16px;     /* least space between the list and a long text */
+  --info-block-gap: 1em;    /* between blocks on the info page (bio, cv…) */
+
+  /* phone */
+  --margin-mobile: 30px;    /* outer edge, and space between sections */
+  --image-gap-mobile: 30px; /* between stacked images */
+
+  /* cursor */
+  --cursor-size: 10px;      /* the dot that follows the mouse */
+  --cursor-link-scale: 1.6; /* how much it grows over something clickable */
+  --cursor-lag: 0;          /* 0 = sticks to the mouse; 0.8 = trails behind */
   --cursor-opacity: 0.5;
+
+  /* scroll indicators */
+  --dot: 7px;               /* the dots on the two scroll lines */
 }
 
 /* ---------- 2. font ---------- */
@@ -76,6 +101,17 @@
   font-display: swap;
 }
 
+/* *Italic* in the sheet. Needs fonts/SuisseIntl-RegularItalic.woff2
+   — without it the browser slants the Regular itself, which looks
+   wrong. */
+@font-face {
+  font-family: "Suisse Intl";
+  src: url("fonts/SuisseIntl-RegularItalic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
 /* ---------- 3. base ---------- */
 
 * { box-sizing: border-box; }
@@ -93,6 +129,7 @@ body {
   font-family: "Suisse Intl", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: var(--fs-body);
   line-height: var(--lh-body);
+  text-transform: var(--text-case);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -128,8 +165,8 @@ body {
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
   grid-template-rows: minmax(0, 1fr);
-  gap: var(--gap);
-  padding: var(--gap);
+  gap: var(--gutter);
+  padding: var(--margin);
 }
 
 #bar { display: none; }        /* mobile only */
@@ -153,7 +190,7 @@ body {
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
   grid-template-rows: minmax(0, 1fr);
-  gap: var(--gap);
+  gap: var(--gutter);
   height: 100%;
   min-height: 0;
 }
@@ -174,32 +211,28 @@ body {
 #sidebar .brand,
 #sidebar .meta a { font-weight: 600; }
 
-#sidebar .brand { margin-bottom: var(--nav-gap); }
+#sidebar .brand { margin-bottom: var(--brand-gap); }
+#sidebar .meta { margin-top: var(--nav-meta-gap); }
 
-/* Projects: regular at rest, semibold under the cursor, bold when
-   open. Weight alone — no grey, no underline. */
-#project-index a { font-weight: 400; }
-#project-index a:hover { font-weight: 600; }
+/* Projects, as in "Hovering graphics": the title alone at rest; on
+   hover its type, medium and year follow on the same line,
+   comma-separated; the open project shows the same line in bold.
+   Weight alone — no grey, no underline.
+
+   A line never wraps, so nothing below it can jump when it grows or
+   turns bold. A long one simply runs on into the empty column beside
+   the list. */
+#project-index a {
+  font-weight: 400;
+  white-space: nowrap;
+}
+
 #project-index a.active { font-weight: 700; }
 
-/* Weight changes width, and a title that fits on one line in regular
-   can wrap in bold — the whole list below would jump a line. So the
-   visible title and an invisible bold copy share one grid cell: the
-   box is always sized for the widest version, and never moves. */
-#project-index a { display: grid; }
+#project-index .line-meta { display: none; }
 
-#project-index a > span,
-#project-index a::after {
-  grid-area: 1 / 1;
-  justify-self: start;      /* as wide as the words, not the column */
-}
-
-#project-index a::after {
-  content: attr(data-label);
-  font-weight: 700;
-  visibility: hidden;
-  pointer-events: none;
-}
+#project-index a:hover .line-meta,
+#project-index a.active .line-meta { display: inline; }
 
 #menu-toggle {
   border: 0;
@@ -224,7 +257,7 @@ body {
 
 /* Continuous scroll, no snapping. */
 .frame {
-  margin: 0 0 var(--gap);
+  margin: 0 0 var(--image-gap);
   display: block;
 }
 
@@ -248,13 +281,37 @@ body {
 .frame.is-portrait video {
   width: auto;
   max-width: 100%;
-  max-height: calc(100vh - var(--gap) * 2);
+  max-height: var(--portrait-max);
+}
+
+/* A Vimeo film. --ratio is width ÷ height, set from the film itself.
+   Landscape fills the four columns; a vertical film is capped by
+   --portrait-max and centred, like a vertical photo. */
+.vimeo {
+  position: relative;
+  width: min(100%, calc(var(--portrait-max) * var(--ratio, 1.7778)));
+  aspect-ratio: var(--ratio, 1.7778);
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+/* Scaled up by a hair and clipped: where the film's proportions and
+   the box round to different pixels, the player would otherwise show
+   a one-pixel line of its own background along an edge. */
+.vimeo iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  transform: scale(1.012);
 }
 
 #project-images { display: contents; }
 
 #project-images figcaption {
-  margin-top: calc(var(--gap) / 3);
+  margin-top: var(--caption-gap);
 }
 
 /* Previewing another project from inside one: the media column shows
@@ -291,14 +348,14 @@ body.is-previewing #project-media { display: none; }
    of rounding, whatever the browser or font. */
 .col-text.is-scrolling { overflow-y: auto; }
 
-/* Year / type / medium, stacked above the description. */
-#project-meta { margin-bottom: 1em; }
-#project-meta p { margin: 0; }
-
 #project-text p { margin: 0; }
 
-#info-content { margin-bottom: 1em; }
-.info-block { margin-bottom: 1em; }
+/* Links and italics typed in the sheet: [word](https://…) and *word*. */
+.col-text a.text-link { font-weight: var(--link-weight); }
+.col-text em { font-style: italic; }
+
+#info-content { margin-bottom: var(--info-block-gap); }
+.info-block { margin-bottom: var(--info-block-gap); }
 .info-block h2 {
   font-size: inherit;
   font-weight: 600;
@@ -312,23 +369,6 @@ body.is-previewing #project-media { display: none; }
   grid-column: var(--col-text);
   align-self: end;
 }
-
-/* Type / medium / year, level with the hovered title. Its right end
-   sits exactly on the description's right edge — one vertical line
-   from the hover down through the text — and the three parts are
-   packed against it at --meta-gap apart. JS sets the box. */
-#hover-meta {
-  position: fixed;
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--meta-gap);
-  z-index: 30;
-  pointer-events: none;
-  white-space: nowrap;
-  line-height: var(--lh-nav);
-}
-
-#hover-meta span { flex: 0 0 auto; }
 
 /* ---------- 8. cursor ---------- */
 
@@ -348,8 +388,8 @@ body.is-previewing #project-media { display: none; }
   z-index: 200;
   display: none;
   align-items: center;
-  height: var(--dot);
-  margin: calc(var(--dot) / -2) 0 0 calc(var(--dot) / -2);
+  height: var(--cursor-size);
+  margin: calc(var(--cursor-size) / -2) 0 0 calc(var(--cursor-size) / -2);
   gap: 0.8em;
   opacity: var(--cursor-opacity);
   pointer-events: none;
@@ -363,11 +403,15 @@ body.has-cursor #cursor { display: flex; }
 #cursor::before {
   content: '';
   flex: 0 0 auto;
-  width: var(--dot);
-  height: var(--dot);
+  width: var(--cursor-size);
+  height: var(--cursor-size);
   border-radius: 50%;
   background: var(--ink);
+  transition: transform 150ms ease;
 }
+
+/* Over anything clickable — a title, a linked word, info, contact. */
+#cursor.is-link::before { transform: scale(var(--cursor-link-scale)); }
 
 .cursor-label {
   white-space: nowrap;
@@ -409,15 +453,15 @@ body.is-focus .scroll-indicator { opacity: 0; }
 
 /* Images: the right edge of the window, full height. */
 #scrollbar {
-  top: var(--gap);
-  bottom: var(--gap);
-  right: calc(var(--gap) / 2 - var(--dot) / 2);
+  top: var(--margin);
+  bottom: var(--margin);
+  right: calc(var(--margin) / 2 - var(--dot) / 2);
 }
 
 /* Description: centred in the margin to the left of the text. JS
    sets its top and height to match the text box exactly. */
 #text-scrollbar {
-  left: calc(var(--gap) / 2 - var(--dot) / 2);
+  left: calc(var(--margin) / 2 - var(--dot) / 2);
   top: 0;
   height: 0;
 }
@@ -471,9 +515,11 @@ body.is-focus .col-text {
 
 @media (max-width: 800px) {
 
-  /* The phone keeps its 30px margin; the desktop value doesn't
-     apply here. */
-  :root { --gap: 30px; }
+  /* The phone uses its own settings (section 1). */
+  :root {
+    --margin: var(--margin-mobile);
+    --image-gap: var(--image-gap-mobile);
+  }
 
   html, body {
     height: auto;
@@ -482,7 +528,7 @@ body.is-focus .col-text {
 
   body {
     display: block;
-    padding: var(--gap);
+    padding: var(--margin);
   }
 
   /* Name left, "index" right — both stay put while you scroll. */
@@ -493,7 +539,7 @@ body.is-focus .col-text {
     z-index: 40;
     align-items: baseline;
     justify-content: space-between;
-    padding: var(--gap);
+    padding: var(--margin);
     background: var(--bg);
   }
 
@@ -506,7 +552,7 @@ body.is-focus .col-text {
     z-index: 30;
     max-height: 100vh;
     overflow-y: auto;
-    padding: calc(var(--gap) * 2.4) var(--gap) var(--gap);
+    padding: calc(var(--margin) * 2.4) var(--margin) var(--margin);
     background: var(--bg);
     transform: translateY(-101%);
     transition: transform 240ms ease;
@@ -528,7 +574,7 @@ body.is-focus .col-text {
 
   #main {
     height: auto;
-    padding-top: calc(var(--gap) * 1.6);
+    padding-top: calc(var(--margin) * 1.6);
   }
 
   .view {
@@ -542,7 +588,7 @@ body.is-focus .col-text {
     align-self: auto;
     max-height: none;
     overflow: visible;
-    margin: 0 0 var(--gap);
+    margin: 0 0 var(--margin);
   }
 
   .col-content {
@@ -551,6 +597,7 @@ body.is-focus .col-text {
   }
 
   /* Full width on a phone, portrait included. */
+  .vimeo { width: 100%; }
   .frame.is-portrait { display: block; }
 
   .frame.is-portrait img,
@@ -561,9 +608,12 @@ body.is-focus .col-text {
 
   /* The page scrolls as one on a phone: the right-hand indicator
      tracks it; the text one has nothing of its own to track. */
-  #hover-meta,
   #cursor,
   #text-scrollbar { display: none !important; }
+
+  /* In the drop-down a long line may wrap — there's no column beside
+     it to run into. */
+  #project-index a { white-space: normal; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -573,6 +623,7 @@ body.is-focus .col-text {
   #sidebar .meta,
   .col-text,
   #cursor,
+  #cursor::before,
   .cursor-label,
   .scroll-indicator { transition: none; }
 }

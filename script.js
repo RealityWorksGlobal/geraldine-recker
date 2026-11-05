@@ -96,8 +96,37 @@ function isVideo(name) {
   return /\.(mp4|mov|webm|m4v)(\?|$)/i.test(String(name).trim());
 }
 
-// Type, medium, year — the order of Géraldine's layout. Used both
-// for the hover line and the stack above the description.
+// A Vimeo link in the content column becomes an embedded player.
+function isVimeo(name) {
+  return /(^|\/\/|\.)vimeo\.com\//i.test(String(name).trim());
+}
+
+// Any form of Vimeo link -> the player URL. Handles vimeo.com/ID,
+// vimeo.com/ID/HASH (unlisted), player.vimeo.com/video/ID?h=HASH and
+// links copied with ?share=… on the end.
+function vimeoPlayerURL(link) {
+  var u = String(link).trim();
+  var id = (u.match(/vimeo\.com\/(?:.*?\/)?(?:video\/)?(\d+)/i) || [])[1];
+  if (!id) return '';
+  var hash = (u.match(/vimeo\.com\/(?:.*?\/)?(?:video\/)?\d+\/([0-9a-f]+)/i) || [])[1] ||
+             (u.match(/[?&]h=([0-9a-f]+)/i) || [])[1] || '';
+  // dnt=1: no Vimeo tracking cookies. title/byline/portrait=0: just
+  // the film, no Vimeo header over it.
+  return 'https://player.vimeo.com/video/' + id + '?' +
+    (hash ? 'h=' + hash + '&' : '') +
+    'dnt=1&title=0&byline=0&portrait=0';
+}
+
+// Stills and clips only — what can be shown in a cover slot.
+function isStill(name) { return !!name && !isVimeo(name); }
+
+function firstStill(list) {
+  for (var i = 0; i < list.length; i++) if (isStill(list[i])) return list[i];
+  return '';
+}
+
+// Type, medium, year — the order of Géraldine's layout, shown after
+// the title in the project list.
 function metaBits(p) {
   return [p.type, p.medium, p.year].filter(Boolean);
 }
@@ -115,9 +144,32 @@ function paragraphs(into, text) {
   text.split(/\\n|\n/).forEach(function (para) {
     if (!para.trim()) return;
     var node = document.createElement('p');
-    node.textContent = para.trim();
+    node.innerHTML = inlineMarkup(para.trim());
     into.appendChild(node);
   });
+}
+
+/* The two marks Géraldine can type in the sheet:
+     [word](https://…)   a link (also mailto:…)
+     *word*              italic
+   Everything else is shown as plain text: the sheet's text is escaped
+   first, so nothing in it can become HTML by accident. */
+function inlineMarkup(text) {
+  var safe = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  safe = safe.replace(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:)[^\s)]+)\)/g, function (m, label, href) {
+    var external = href.indexOf('mailto:') !== 0;
+    return '<a class="text-link" href="' + href + '"' +
+      (external ? ' target="_blank" rel="noopener"' : '') + '>' + label + '</a>';
+  });
+
+  // The asterisks must hug the words — "*word*", not "5 * 3 * 2".
+  safe = safe.replace(/(^|[^\w*])\*(\S(?:[^*\n]*?\S)?)\*(?![\w*])/g, '$1<em>$2</em>');
+  return safe;
 }
 
 function fail(msg) {
@@ -260,11 +312,19 @@ function renderIndex() {
 
     a.href = '#' + p.slug;
     a.dataset.slug = p.slug;
-    // The invisible bold copy the CSS uses to hold the box steady.
-    a.dataset.label = p.title;
     span.textContent = p.title;
-
     a.appendChild(span);
+
+    // Type, medium, year — shown after the title on hover and when
+    // open, as one comma-separated line.
+    var bits = metaBits(p);
+    if (bits.length) {
+      var meta = document.createElement('span');
+      meta.className = 'line-meta';
+      meta.textContent = ', ' + bits.join(', ');
+      a.appendChild(meta);
+    }
+
     li.appendChild(a);
     ul.appendChild(li);
   });
@@ -273,7 +333,7 @@ function renderIndex() {
 function buildCoverPool() {
   coverPool = [];
   projects.forEach(function (p) {
-    p.covers.forEach(function (c) { coverPool.push(c); });
+    p.covers.forEach(function (c) { if (isStill(c)) coverPool.push(c); });
   });
 }
 
@@ -314,22 +374,13 @@ function renderProject(p) {
 
   el('project-title').textContent = p.title;
 
-  // Type / medium / year, one line each, above the description.
-  var meta = el('project-meta');
-  meta.innerHTML = '';
-  metaBits(p).forEach(function (b) {
-    var line = document.createElement('p');
-    line.textContent = b;
-    meta.appendChild(line);
-  });
-
   paragraphs(el('project-text'), p.description);
 
   // The lead image. If the photo on screen belongs to this project
   // it carries straight through; otherwise the project's own cover.
   // A photo from another project can never lead.
   var own = p.covers.concat(p.images);
-  openLead = (currentCover && own.indexOf(currentCover) > -1) ? currentCover : (p.covers[0] || '');
+  openLead = (currentCover && own.indexOf(currentCover) > -1) ? currentCover : firstStill(p.covers);
 
   // Clear first, so the previous project's lead is never on screen
   // for even a moment while the new one loads.
@@ -341,8 +392,24 @@ function renderProject(p) {
   box.innerHTML = '';
 
   p.images.forEach(function (name, i) {
+    // The lead image is already at the top: don't show it twice.
+    if (name === openLead) return;
+
     var fig = document.createElement('figure');
     fig.className = 'frame';
+
+    if (isVimeo(name)) {
+      fig.classList.add('frame-vimeo');
+      watchFrame(fig);
+      fig.appendChild(vimeoPlayer(name, p.captions[i] || p.title));
+      if (p.captions[i]) {
+        var vcap = document.createElement('figcaption');
+        vcap.textContent = p.captions[i];
+        fig.appendChild(vcap);
+      }
+      box.appendChild(fig);
+      return;
+    }
 
     var media;
     if (isVideo(name)) {
@@ -367,6 +434,7 @@ function renderProject(p) {
 
     fig.appendChild(media);
     tagOnce(media, fig);
+    watchFrame(fig);
 
     if (p.captions[i]) {
       var cap = document.createElement('figcaption');
@@ -380,6 +448,52 @@ function renderProject(p) {
   watchVideos(box);
 
   document.title = 'Géraldine Recker — ' + p.title;
+}
+
+/* A Vimeo film: Vimeo's own player, with controls and sound, never
+   autoplaying. It starts at 16:9 and takes the film's real
+   proportions as soon as Vimeo reports them, so a vertical film is
+   sized like a vertical photo (see .vimeo in the CSS). */
+function vimeoPlayer(link, label) {
+  var wrap = document.createElement('div');
+  wrap.className = 'vimeo';
+  wrap.style.setProperty('--ratio', String(16 / 9));
+
+  var src = vimeoPlayerURL(link);
+  if (!src) {
+    console.warn('Not a Vimeo video link:', link);
+    return wrap;
+  }
+
+  var frame = document.createElement('iframe');
+  frame.src = src;
+  frame.title = label || 'video';
+  frame.loading = 'lazy';
+  frame.allow = 'autoplay; fullscreen; picture-in-picture';
+  frame.setAttribute('allowfullscreen', '');
+  wrap.appendChild(frame);
+
+  // Vimeo's oEmbed endpoint returns the film's width and height.
+  if (window.fetch) {
+    fetch('https://vimeo.com/api/oembed.json?url=' + encodeURIComponent(String(link).trim()))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d && d.width && d.height) wrap.style.setProperty('--ratio', String(d.width / d.height));
+      })
+      .catch(function () {});              // stays 16:9
+  }
+
+  return wrap;
+}
+
+// A hidden player keeps playing its sound, so every Vimeo film in a
+// part of the page that's leaving the screen is paused through
+// Vimeo's own message interface.
+function pauseVimeo(root) {
+  if (!root) return;
+  Array.prototype.forEach.call(root.querySelectorAll('.vimeo iframe'), function (f) {
+    try { f.contentWindow.postMessage('{"method":"pause"}', 'https://player.vimeo.com'); } catch (e) {}
+  });
 }
 
 // One block per row: "title" is the heading, "content" the body,
@@ -421,7 +535,7 @@ function renderInfo(rows) {
 /* The description shares columns 1–2 with the nav. This measures
    the nav's real height, and the CSS caps the text box to the space
    below it — so a long text scrolls under the list, never over it.
-   Measured, so it follows the list's length, --gap and the font. */
+   Measured, so it follows the list's length, the settings and the font. */
 function alignText() {
   if (isMobile()) {
     document.documentElement.style.setProperty('--text-top', '0px');
@@ -429,10 +543,17 @@ function alignText() {
   }
   var nav = el('sidebar');
   if (!nav) return;
-  var gap = parseFloat(getComputedStyle(document.body).rowGap) || 0;
+  var gap = textNavGap();
   var h = nav.getBoundingClientRect().height;
   document.documentElement.style.setProperty('--text-top', (h + gap) + 'px');
   fitText();
+}
+
+// --text-nav-gap in pixels: the least space kept between the list and
+// a long description.
+function textNavGap() {
+  var fs = parseFloat(getComputedStyle(document.body).fontSize) || 14;
+  return toPx(getComputedStyle(document.documentElement).getPropertyValue('--text-nav-gap'), fs, 16);
 }
 
 /* A description a few pixels too tall for its space would scroll by
@@ -445,7 +566,7 @@ function fitText() {
   if (isMobile()) return;
   var nav = el('sidebar');
   if (!nav) return;
-  var gap = parseFloat(getComputedStyle(document.body).rowGap) || 0;
+  var gap = textNavGap();
   var navH = nav.getBoundingClientRect().height;
 
   Array.prototype.forEach.call(document.querySelectorAll('.view:not([hidden]) .col-text'), function (c) {
@@ -465,10 +586,44 @@ function fitText() {
   });
 }
 
+/* The first image of whatever the media column shows — a project's
+   lead, its first content image or film, the home photo, a hover
+   preview — sits vertically centred in the column. Everything after
+   it follows at --image-gap. Re-measured whenever that first frame
+   changes size: a new image loading, a film learning its shape, the
+   window resizing. */
+var leadWatch = window.ResizeObserver ? new ResizeObserver(function () { centerLead(); }) : null;
+
+function watchFrame(frame) {
+  if (leadWatch && frame) leadWatch.observe(frame);
+}
+
+function centerLead() {
+  Array.prototype.forEach.call(document.querySelectorAll('.col-content .frame'), function (f) {
+    f.style.marginTop = '';
+  });
+  if (isMobile()) return;
+
+  var col = document.querySelector('.view:not([hidden]) .col-content');
+  if (!col) return;
+
+  var first = null;
+  var frames = col.querySelectorAll('.frame');
+  for (var i = 0; i < frames.length; i++) {
+    if (frames[i].offsetParent !== null || frames[i].getClientRects().length) { first = frames[i]; break; }
+  }
+  if (!first) return;
+
+  var h = first.getBoundingClientRect().height;
+  if (!h) return;                                   // nothing drawn yet
+  var top = Math.max(0, (col.clientHeight - h) / 2);
+  first.style.marginTop = top + 'px';
+}
+
 /* ---------- hover ---------- */
 
 /* Hovering a project title:
- *  - always shows its year / type / medium beside the title;
+ *  - shows its type, medium and year after the title (CSS);
  *  - on home, swaps the cover photo (and it stays after you leave);
  *  - inside an open project, previews the hovered cover in place of
  *    the open project's images — the text you're reading stays put —
@@ -481,7 +636,6 @@ function wireHover() {
   if (!FINE_POINTER) return;
 
   var list = el('project-index');
-  var meta = el('hover-meta');
 
   list.addEventListener('click', function (e) {
     var a = e.target.closest('a[data-slug]');
@@ -500,11 +654,9 @@ function wireHover() {
     var p = findProject(a.dataset.slug);
     if (!p) return;
 
-    showMeta(p, a);
-
     if (!hoverArmed) return;
 
-    var shot = p.covers[0] || p.images[0];
+    var shot = firstStill(p.covers) || firstStill(p.images);
     var projectOpen = !el('project').hidden;
     var infoOpen = !el('info').hidden;
 
@@ -512,6 +664,7 @@ function wireHover() {
       // Info has no image of its own: the hovered cover appears in
       // the media column, and goes again when the cursor leaves.
       if (shot) swapMedia(el('info-cover'), shot);
+      centerLead();
       return;
     }
 
@@ -525,7 +678,6 @@ function wireHover() {
   });
 
   list.addEventListener('mouseleave', function () {
-    meta.hidden = true;
     endPreview();
     clearInfoCover();
   });
@@ -533,70 +685,6 @@ function wireHover() {
   el('sidebar').addEventListener('mouseleave', function () {
     hoverArmed = true;
   });
-}
-
-function showMeta(p, link) {
-  var meta = el('hover-meta');
-  var bits = metaBits(p);
-  if (!bits.length) { meta.hidden = true; return; }
-
-  meta.innerHTML = '';
-  bits.forEach(function (b) {
-    var s = document.createElement('span');
-    s.textContent = b;
-    meta.appendChild(s);
-  });
-  meta.hidden = false;      // visible first, so the words can be measured
-  placeMeta(link);
-}
-
-/* Level with the hovered title. The box runs from just past the end
-   of the title to the right edge of the description column, and the
-   three words are packed against that right edge — so the hover line
-   and the text below finish on the same vertical.
-
-   On a narrow screen the room between title and edge can be smaller
-   than the three words at full spacing. Then the spacing tightens to
-   fit; and if even the tightest spacing won't fit, the line runs on
-   past the text edge rather than back over the title. */
-function placeMeta(link) {
-  var meta = el('hover-meta');
-  var col = document.querySelector('.view:not([hidden]) .col-text');
-  if (!col) return;
-
-  var title = link.querySelector('span') || link;
-  var root = getComputedStyle(document.documentElement);
-  var fs = parseFloat(getComputedStyle(meta).fontSize) || 14;
-
-  var right = col.getBoundingClientRect().right;
-  var left = title.getBoundingClientRect().right + fs;   // 1em clear of the title
-  var room = Math.max(0, right - left);
-
-  meta.style.top = link.getBoundingClientRect().top + 'px';
-  meta.style.left = left + 'px';
-  meta.style.width = room + 'px';
-
-  var spans = meta.querySelectorAll('span');
-  var words = 0;
-  Array.prototype.forEach.call(spans, function (sp) {
-    words += sp.getBoundingClientRect().width;
-  });
-  var joins = Math.max(1, spans.length - 1);
-
-  var full = toPx(root.getPropertyValue('--meta-gap'), fs, 4 * fs);
-  var tight = toPx(root.getPropertyValue('--meta-gap-min'), fs, 0.75 * fs);
-  var fits = (room - words) / joins;
-
-  if (fits >= full) {
-    meta.style.gap = full + 'px';
-    meta.style.justifyContent = 'flex-end';
-  } else if (fits >= tight) {
-    meta.style.gap = fits + 'px';               // tightened, still on the edge
-    meta.style.justifyContent = 'flex-end';
-  } else {
-    meta.style.gap = tight + 'px';              // runs past the edge instead
-    meta.style.justifyContent = 'flex-start';
-  }
 }
 
 // "4em" or "56px" -> pixels.
@@ -613,16 +701,19 @@ function startPreview(shot) {
   var col = document.querySelector('#project .col-content');
   if (!document.body.classList.contains('is-previewing')) {
     previewScroll = col ? col.scrollTop : 0;
+    pauseVimeo(el('project-images'));
     document.body.classList.add('is-previewing');
   }
   if (col) col.scrollTop = 0;
   swapMedia(el('project-cover'), shot);
+  centerLead();
 }
 
 function endPreview() {
   if (!document.body.classList.contains('is-previewing')) return;
   document.body.classList.remove('is-previewing');
   swapMedia(el('project-cover'), openLead);
+  centerLead();
   var col = document.querySelector('#project .col-content');
   if (col) col.scrollTop = previewScroll;
 }
@@ -633,6 +724,7 @@ function clearInfoCover() {
   f.dataset.want = '';       // cancels anything still loading
   clearMedia(f);
   f.hidden = true;
+  f.style.marginTop = '';
 }
 
 /* ---------- focus ---------- */
@@ -651,7 +743,6 @@ function wireFocus() {
     if (!landingOver) return;
     if (e.target.closest('.frame img, .frame video')) {
       document.body.classList.add('is-focus');
-      el('hover-meta').hidden = true;
     }
   }, true);
 
@@ -662,8 +753,10 @@ function wireFocus() {
 
 /* ---------- cursor ---------- */
 
-// A dot that trails the pointer. Over an image, once the landing is
-// over, it says what a click there does — it isn't guessable.
+// A dot on the pointer. It grows over anything clickable, and over an
+// image (once the landing is over) it says what a click there does,
+// since that isn't guessable. --cursor-lag sets how far it trails:
+// 0 sticks to the mouse.
 function wireCursor() {
   if (!FINE_POINTER) return;
 
@@ -673,17 +766,44 @@ function wireCursor() {
 
   document.body.classList.add('has-cursor');
 
+  var lag = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cursor-lag')) || 0;
+  lag = Math.min(Math.max(lag, 0), 0.95);
+
   var x = -100, y = -100;
   var cx = x, cy = y;
   var over = false;
   var shown = false;
   var running = false;
 
+  function place() {
+    cursor.style.transform = 'translate(' + cx + 'px, ' + cy + 'px)';
+  }
+
+  function label_() {
+    var want = over && landingOver && !document.body.classList.contains('is-focus');
+    if (want !== shown) {
+      shown = want;
+      if (label) label.textContent = want ? CURSOR_LABEL : '';
+      cursor.classList.toggle('has-label', want);
+    }
+  }
+
   document.addEventListener('mousemove', function (e) {
     x = e.clientX;
     y = e.clientY;
-    over = !!(e.target.closest && e.target.closest('.frame img, .frame video'));
+
+    var t = e.target.closest ? e.target : null;
+    over = !!(t && t.closest('.frame img, .frame video'));
+    cursor.classList.toggle('is-link', !!(t && t.closest('a, button')));
     cursor.classList.remove('is-away');
+
+    if (lag === 0) {
+      // Straight to the pointer, in the same frame.
+      cx = x; cy = y;
+      place();
+      label_();
+      return;
+    }
     if (!running) { running = true; requestAnimationFrame(frame); }
   });
 
@@ -691,19 +811,23 @@ function wireCursor() {
     cursor.classList.add('is-away');
   });
 
+  // A click or Escape can enter or leave focus without the mouse
+  // moving, so the label is refreshed then too.
+  document.addEventListener('click', label_);
+  document.addEventListener('keydown', label_);
+
+  // Over a Vimeo player the pointer belongs to Vimeo (its own cursor
+  // and controls), so the dot steps aside until the pointer is back.
+  document.addEventListener('mouseover', function (e) {
+    if (e.target.closest && e.target.closest('.vimeo')) cursor.classList.add('is-away');
+  });
+
+  // Only used when --cursor-lag is above 0.
   function frame() {
-    cx += (x - cx) * 0.2;
-    cy += (y - cy) * 0.2;
-    cursor.style.transform = 'translate(' + cx + 'px, ' + cy + 'px)';
-
-    var want = over && landingOver && !document.body.classList.contains('is-focus');
-    if (want !== shown) {
-      shown = want;
-      if (label) label.textContent = want ? CURSOR_LABEL : '';
-      cursor.classList.toggle('has-label', want);
-    }
-
-    // Rest once the dot has caught up; the next mousemove wakes it.
+    cx += (x - cx) * (1 - lag);
+    cy += (y - cy) * (1 - lag);
+    place();
+    label_();
     if (Math.abs(x - cx) < 0.1 && Math.abs(y - cy) < 0.1) {
       running = false;
       return;
@@ -820,6 +944,7 @@ function watchVideos(root) {
 
 function show(id) {
   ['home', 'project', 'info'].forEach(function (v) {
+    if (v !== id) pauseVimeo(el(v));
     el(v).hidden = (v !== id);
   });
 
@@ -848,7 +973,6 @@ function markActive(slug) {
 
 function route() {
   document.body.classList.remove('is-focus', 'is-previewing');
-  el('hover-meta').hidden = true;
   clearInfoCover();
 
   var hash = decodeURIComponent(window.location.hash.replace('#', ''));
@@ -862,6 +986,7 @@ function route() {
     // Nothing to protect on home, so hover works straight away.
     hoverArmed = true;
     document.title = 'Géraldine Recker';
+    centerLead();
     return;
   }
 
@@ -871,6 +996,7 @@ function route() {
     markActive('');
     resetScroll('#info');
     document.title = 'Géraldine Recker — Info';
+    centerLead();
     return;
   }
 
@@ -880,6 +1006,7 @@ function route() {
     show('project');
     markActive(p.slug);
     resetScroll('#project');
+    centerLead();
   } else {
     openSlug = '';
     show('home');
@@ -918,16 +1045,14 @@ el('menu-toggle').addEventListener('click', toggleMenu);
 window.addEventListener('hashchange', route);
 window.addEventListener('popstate', route);
 
-window.addEventListener('resize', function () {
-  el('hover-meta').hidden = true;
-  alignText();
-});
+window.addEventListener('resize', function () { alignText(); centerLead(); });
 
 // The nav's height changes when the webfonts land and whenever the
 // list changes; keep the text column measured against it.
 if (window.ResizeObserver) {
   new ResizeObserver(alignText).observe(el('sidebar'));
 }
+['home-cover', 'project-cover', 'info-cover'].forEach(function (id) { watchFrame(el(id)); });
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(alignText);
 }
