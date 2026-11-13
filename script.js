@@ -507,10 +507,18 @@ function pauseVimeo(root) {
 
 // One block per row: "title" is the heading, "content" the body,
 // "number" the order — so the sheet can be rearranged freely.
+var infoImage = '';           // the info page's own image (sheet: info → image)
+
 function renderInfo(rows) {
   var box = el('info-content');
   if (!box) return;
   box.innerHTML = '';
+
+  // The image on the right: the first filled cell of the 'image'
+  // column — a photo, a GIF or a clip (.mp4), from the NAS.
+  infoImage = '';
+  rows.some(function (r) { if (r.image) { infoImage = r.image; return true; } return false; });
+  clearInfoCover();             // shows it now if the info page is already open
 
   // The bio: the 'content' column, every filled row, top to bottom.
   rows.forEach(function (r) {
@@ -689,8 +697,8 @@ function wireHover() {
     var infoOpen = !el('info').hidden;
 
     if (infoOpen) {
-      // Info has no image of its own: the hovered cover appears in
-      // the media column, and goes again when the cursor leaves.
+      // The hovered cover replaces the info image while the cursor
+      // is on the list; the info image comes back when it leaves.
       if (shot) swapMedia(el('info-cover'), shot);
       centerLead();
       return;
@@ -746,6 +754,8 @@ function endPreview() {
   if (col) col.scrollTop = previewScroll;
 }
 
+// Ends a hover preview on the info page. The info page's own image
+// comes back (contact has none); elsewhere the slot is emptied.
 function clearInfoCover() {
   var f = el('info-cover');
   if (!f) return;
@@ -753,6 +763,10 @@ function clearInfoCover() {
   clearMedia(f);
   f.hidden = true;
   f.style.marginTop = '';
+  if (window.location.hash === '#info' && infoImage) {
+    swapMedia(f, infoImage);
+    centerLead();
+  }
 }
 
 /* ---------- focus ---------- */
